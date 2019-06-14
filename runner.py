@@ -149,7 +149,8 @@ class ExperimentRunner:
 
     @staticmethod
     def get_new_mask(prune_percent, data, current_mask):
-        sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask))).values
+        # TODO: Remove the random .cuda() in the below line
+        sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask.cuda()))).values
         cutoff_index = np.round(prune_percent * len(sorted_weights)).astype(int)
         cutoff = sorted_weights[cutoff_index]
         return torch.from_numpy(np.where(np.abs(data) <= cutoff, np.zeros(current_mask.shape), current_mask)).byte()
@@ -203,7 +204,7 @@ def mnist_experiment():
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
     experiment.test(input_size, mnist_test_loader)
     experiment.print_stats()
-    mask_dict = experiment.prune(mask_dict.cuda(), prune_percent=0.2)
+    mask_dict = experiment.prune(mask_dict, prune_percent=0.2)
     initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
 
     model_2 = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
