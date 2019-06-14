@@ -119,6 +119,7 @@ def mnist_experiment():
     mnist_test_loader = torch.utils.data.DataLoader(dataset=mnist_test_dataset, batch_size=batch_size, shuffle=False)
 
     model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes)
+    model.cuda()
     experiment = ExperimentRunner(model)
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
     experiment.print_stats()
