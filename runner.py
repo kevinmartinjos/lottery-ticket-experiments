@@ -18,6 +18,7 @@ class ExperimentRunner:
     TEST_ACCURACY = "test_accuracy"
     DEVICE = "device"
     ZERO_COUNTS_IN_INITIAL_WEIGHTS = "zero_counts_in_initial_weights"
+    ZERO_COUNTS_IN_MASKS = "zero_counts_in_masks"
 
     def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
         self.model = model
@@ -67,7 +68,6 @@ class ExperimentRunner:
 
         self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
         self.update_stat(self.FINAL_VALIDATION_ACCURACY, validation_accuracy)
-        self.update_stat(self.ZERO_COUNTS_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
 
     def validate(self, input_size, validation_dataloader):
         with torch.no_grad():
@@ -144,6 +144,7 @@ class ExperimentRunner:
                 new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
                 mask_dict[name] = new_mask
 
+        self.update_stat(self.ZERO_COUNTS_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
         return mask_dict
 
     @staticmethod
@@ -169,6 +170,14 @@ class ExperimentRunner:
         for name, param in self.model.named_parameters():
             if name.endswith('weight'):
                 zeros_info_dict[name] = get_zero_count(param.data)
+
+        return zeros_info_dict
+
+    def get_zero_count_in_mask(self, mask_dict):
+        zeros_info_dict = dict()
+
+        for name, data in mask_dict.items():
+            zeros_info_dict[name] = get_zero_count(data)
 
         return zeros_info_dict
 
@@ -200,6 +209,12 @@ def mnist_experiment():
     model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes)
     if torch.cuda.is_available():
         model.cuda()
+    experiment = ExperimentRunner(model)
+
+    experiment.train(input_size, mnist_train_loader, mnist_val_loader)
+    experiment.test(input_size, mnist_test_loader)
+    mask_dict = experiment.get_initial_mask()
+
     # I now have a mask and pre_init
     # 1. Initialize another network with pre_init, and set a mask on it
     # 2. while training, make sure that the weights are indeed 0 according to the mask - set a breakpoint
@@ -207,21 +222,21 @@ def mnist_experiment():
     # 3. Repeat 1 & 2 one more time
     # 4. Check the test accuracy of the pruned network on the test data set.
 
-    experiment = ExperimentRunner(model)
-    mask_dict = experiment.get_initial_mask()
-    experiment.train(input_size, mnist_train_loader, mnist_val_loader)
-    experiment.test(input_size, mnist_test_loader)
+    mask_dict = experiment.prune(mask_dict, prune_percent=0.1)
     experiment.print_stats()
-    mask_dict = experiment.prune(mask_dict, prune_percent=0.2)
-    initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
 
-    model_2 = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
-    if torch.cuda.is_available():
-        model_2.cuda()
-    experiment = ExperimentRunner(model_2)
-    experiment.train(input_size, mnist_train_loader, mnist_val_loader)
-    experiment.test(input_size, mnist_test_loader)
-    experiment.print_stats()
+    pruning_iterations = 4
+    for i in range(1, pruning_iterations):
+        initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
+        new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
+        if torch.cuda.is_available():
+            new_model.cuda()
+        experiment = ExperimentRunner(new_model)
+        experiment.train(input_size, mnist_train_loader, mnist_val_loader)
+        experiment.test(input_size, mnist_test_loader)
+        mask_dict = experiment.prune(mask_dict, prune_percent=0.1)
+        experiment.print_stats()
+
 
 if __name__ == "__main__":
     mnist_experiment()
