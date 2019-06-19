@@ -219,7 +219,7 @@ def mnist_experiment():
         model.cuda()
 
     # Experiment config
-    num_epochs = 20
+    num_epochs = 15
     prune_percent = 0.1
 
     experiment = ExperimentRunner(model, num_epochs=num_epochs)

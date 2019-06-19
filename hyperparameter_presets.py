@@ -2,6 +2,6 @@
 
 FULLY_CONNECTED_MNIST = {
     'input_size': 28 * 28 * 1,
-    'hidden_sizes': [30, 30, 30],
+    'hidden_sizes': [100, 80, 50],
     'num_classes': 10
 }
