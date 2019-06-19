@@ -18,8 +18,8 @@ class ExperimentRunner:
     FINAL_VALIDATION_ACCURACY = "final_validation_accuracy"
     TEST_ACCURACY = "test_accuracy"
     DEVICE = "device"
-    ZERO_COUNTS_IN_INITIAL_WEIGHTS = "zero_counts_in_initial_weights"
-    ZERO_COUNTS_IN_MASKS = "zero_counts_in_masks"
+    ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS = "zero_percentage_in_initial_weights"
+    ZERO_PERCENTAGE_IN_MASKS = "zero_percentage_in_masks"
 
     def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
         self.model = model
@@ -32,7 +32,7 @@ class ExperimentRunner:
         self.stats = {
             self.DEVICE: str(self.device)
         }
-        self.update_stat(self.ZERO_COUNTS_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
+        self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
 
     def print_stats(self):
         print(self.stats)
@@ -50,6 +50,7 @@ class ExperimentRunner:
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
 
         training_start_time = time.time()
+        best_validation_accuracy_so_far = 0
         for epoch in tqdm(range(self.num_epochs)):
             for i, (images, labels) in enumerate(train_dataloader):
                 # Move tensors to the configured device
@@ -66,6 +67,9 @@ class ExperimentRunner:
             lr = self.learning_rate * self.learning_rate_decay
             self.update_lr(optimizer, lr)
             validation_accuracy = self.validate(input_size, validation_dataloader)
+            if validation_accuracy > best_validation_accuracy_so_far:
+                best_validation_accuracy_so_far = validation_accuracy
+                torch.save(self.model.state_dict(), 'temp.ckpt')
 
         self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
         self.update_stat(self.FINAL_VALIDATION_ACCURACY, validation_accuracy)
@@ -98,6 +102,9 @@ class ExperimentRunner:
         return validation_accuracy
 
     def test(self, input_size, test_dataloader):
+        best_model = FullyConnectedMNIST(self.model.input_size, self.model.hidden_sizes, self.model.num_classes)
+        best_model.load_state_dict(torch.load('temp.ckpt'))
+
         with torch.no_grad():
             correct = 0
             total = 0
@@ -106,7 +113,7 @@ class ExperimentRunner:
                 labels = labels.to(self.device)
 
                 images = images.view(self.batch_size, input_size)
-                scores = self.model.forward(images)
+                scores = best_model.forward(images)
 
                 predicted = []
 
@@ -121,7 +128,7 @@ class ExperimentRunner:
                 correct += (predicted == labels).sum().item()
 
             test_accuracy = 100 * correct / total
-            print('Validation accuracy is: {} %'.format(test_accuracy))
+            print('Test accuracy is: {} %'.format(test_accuracy))
 
         self.update_stat(self.TEST_ACCURACY, test_accuracy)
         return test_accuracy
@@ -145,7 +152,7 @@ class ExperimentRunner:
                 new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
                 mask_dict[name] = new_mask
 
-        self.update_stat(self.ZERO_COUNTS_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
+        self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
         return mask_dict
 
     @staticmethod
@@ -170,7 +177,7 @@ class ExperimentRunner:
 
         for name, param in self.model.named_parameters():
             if name.endswith('weight'):
-                zeros_info_dict[name] = get_zero_count(param.data)
+                zeros_info_dict[name] = get_zero_count(param.data)/(param.data.shape[0] * param.data.shape[1])
 
         return zeros_info_dict
 
@@ -178,7 +185,7 @@ class ExperimentRunner:
         zeros_info_dict = dict()
 
         for name, data in mask_dict.items():
-            zeros_info_dict[name] = get_zero_count(data)
+            zeros_info_dict[name] = get_zero_count(data)/(data.shape[0] * data.shape[1])
 
         return zeros_info_dict
 
@@ -210,7 +217,12 @@ def mnist_experiment():
     model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes)
     if torch.cuda.is_available():
         model.cuda()
-    experiment = ExperimentRunner(model)
+
+    # Experiment config
+    num_epochs = 20
+    prune_percent = 0.1
+
+    experiment = ExperimentRunner(model, num_epochs=num_epochs)
 
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
     experiment.test(input_size, mnist_test_loader)
@@ -223,7 +235,7 @@ def mnist_experiment():
     # 3. Repeat 1 & 2 one more time
     # 4. Check the test accuracy of the pruned network on the test data set.
 
-    mask_dict = experiment.prune(mask_dict, prune_percent=0.05)
+    mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
     experiment.print_stats()
 
     # For a max pruning of 18 * 0.05 = 90%
@@ -233,10 +245,10 @@ def mnist_experiment():
         new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
         if torch.cuda.is_available():
             new_model.cuda()
-        experiment = ExperimentRunner(new_model)
+        experiment = ExperimentRunner(new_model, num_epochs=num_epochs)
         experiment.train(input_size, mnist_train_loader, mnist_val_loader)
         experiment.test(input_size, mnist_test_loader)
-        mask_dict = experiment.prune(mask_dict, prune_percent=0.1)
+        mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
         experiment.print_stats()
 
 
