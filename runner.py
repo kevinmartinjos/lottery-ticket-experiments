@@ -223,10 +223,11 @@ def mnist_experiment():
     # 3. Repeat 1 & 2 one more time
     # 4. Check the test accuracy of the pruned network on the test data set.
 
-    mask_dict = experiment.prune(mask_dict, prune_percent=0.1)
+    mask_dict = experiment.prune(mask_dict, prune_percent=0.05)
     experiment.print_stats()
 
-    pruning_iterations = 4
+    # For a max pruning of 18 * 0.05 = 90%
+    pruning_iterations = 18
     for i in range(1, pruning_iterations):
         initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
         new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
