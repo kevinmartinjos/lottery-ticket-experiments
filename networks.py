@@ -1,20 +1,27 @@
 # The plan:
 # Write a base class that can take in a mask and a pre-init
 from torch import nn
-import hyperparameter_presets
-from utils import get_zero_count
 
 
-class LotteryExperimentNetwork(nn.Module):
+class NeuralNetUtilsMixin:
+    def retrieve_initial_weights(self):
+        initial_weights = dict()
+
+        for name, parameter in self.named_parameters():
+            if name.endswith('weight'):
+                initial_weights[name] = parameter.data.clone()
+
+        return initial_weights
+
+
+class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
     def __init__(self, pre_init=None, mask_dict=None):
         # pre_init and mask should both be dicts.
         # The keys should be the name of the layers
         super(LotteryExperimentNetwork, self).__init__()
-        self.create_layers()
         self.mask_dict = mask_dict
         self.pre_init = pre_init
         self.apply_pre_init(pre_init)
-        self.initial_weights = self.get_initial_weights()
 
         # Just making sure that the masks are applied before each forward pass
         # Perhaps we just have to do it once in the beginning and that's all
@@ -24,18 +31,6 @@ class LotteryExperimentNetwork(nn.Module):
         # 2. If those weights are zero, their gradient would also be zero since they did not contribute to the loss at
         # all
         self.register_forward_pre_hook(self.apply_mask)
-
-    def create_layers(self):
-        raise NotImplementedError
-
-    def get_initial_weights(self):
-        initial_weights = dict()
-
-        for name, parameter in self.named_parameters():
-            if name.endswith('weight'):
-                initial_weights[name] = parameter.data.clone()
-
-        return initial_weights
 
     def apply_pre_init(self, pre_init):
         # pre_init is a dict. Keys are strings that represent layer names. Values are weights
@@ -65,13 +60,14 @@ class LotteryExperimentNetwork(nn.Module):
 
 class FullyConnectedMNIST(LotteryExperimentNetwork):
     def __init__(self, input_size, hidden_sizes, num_classes, pre_init=None, mask_dict=None):
+        super(FullyConnectedMNIST, self).__init__(pre_init=pre_init, mask_dict=mask_dict)
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.num_classes = num_classes
         self.pre_init = pre_init
         self.mask_dict = mask_dict
-        self.layers = []
-        super(FullyConnectedMNIST, self).__init__(pre_init=pre_init, mask_dict=mask_dict)
+        self.layers = self.create_layers()
+        self.initial_weights = self.retrieve_initial_weights()
 
     def create_layers(self):
         layers = []
@@ -83,7 +79,7 @@ class FullyConnectedMNIST(LotteryExperimentNetwork):
             layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))
             layers.append(nn.ReLU())
 
-        self.layers = nn.Sequential(*layers)
+        return nn.Sequential(*layers)
 
     def weights_init(self, m):
         if type(m) == nn.Linear:
