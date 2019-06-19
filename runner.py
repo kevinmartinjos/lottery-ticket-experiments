@@ -103,6 +103,8 @@ class ExperimentRunner:
 
     def test(self, input_size, test_dataloader):
         best_model = FullyConnectedMNIST(self.model.input_size, self.model.hidden_sizes, self.model.num_classes)
+        if torch.cuda.is_available():
+            best_model.cuda()
         best_model.load_state_dict(torch.load('temp.ckpt'))
 
         with torch.no_grad():
