@@ -22,7 +22,8 @@ def apply_mask_dict_to_weight_dict(mask_dict, weight_dict):
     weights_after_masking = dict()
     for layer_name, weight in weight_dict.items():
         mask = mask_dict[layer_name]
-        weights_after_masking[layer_name] = weight * mask.float()
+        # The mask should be copied to the cpu since `weights_after_masking` dict is always stored in memory, and not the GPU
+        weights_after_masking[layer_name] = weight * mask.cpu().float()
 
     return weights_after_masking
 
