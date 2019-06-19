@@ -2,6 +2,7 @@ import time
 import torch
 import torchvision
 
+from tqdm import tqdm
 from torch import nn
 from torchvision.transforms import transforms
 
@@ -49,7 +50,7 @@ class ExperimentRunner:
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
 
         training_start_time = time.time()
-        for epoch in range(self.num_epochs):
+        for epoch in tqdm(range(self.num_epochs)):
             for i, (images, labels) in enumerate(train_dataloader):
                 # Move tensors to the configured device
                 images = images.to(self.device)
@@ -61,7 +62,7 @@ class ExperimentRunner:
                 loss.backward()
                 optimizer.step()
 
-            print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch + 1, self.num_epochs, loss.item()))
+            # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch + 1, self.num_epochs, loss.item()))
             lr = self.learning_rate * self.learning_rate_decay
             self.update_lr(optimizer, lr)
             validation_accuracy = self.validate(input_size, validation_dataloader)
@@ -92,7 +93,7 @@ class ExperimentRunner:
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
             validation_accuracy = 100 * correct / total
-            print('Validation accuracy is: {} %'.format(validation_accuracy))
+            # print('Validation accuracy is: {} %'.format(validation_accuracy))
 
         return validation_accuracy
 
