@@ -19,7 +19,7 @@ class ExperimentRunner:
     DEVICE = "device"
     ZERO_COUNTS_IN_INITIAL_WEIGHTS = "zero_counts_in_initial_weights"
 
-    def __init__(self, model, num_epochs=1, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
+    def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
         self.model = model
         self.learning_rate = learning_rate
         self.reg = 0.001  # Should this be a hyper parameter?
