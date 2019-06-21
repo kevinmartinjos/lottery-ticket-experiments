@@ -2,6 +2,8 @@
 # Write a base class that can take in a mask and a pre-init
 from torch import nn
 
+from utils import get_zero_count
+
 
 class NeuralNetUtilsMixin:
     def retrieve_initial_weights(self):
@@ -30,7 +32,7 @@ class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
         # 1. The mask sets some weights as zero
         # 2. If those weights are zero, their gradient would also be zero since they did not contribute to the loss at
         # all
-        self.register_forward_pre_hook(self.apply_mask)
+        self.register_forward_pre_hook(self.apply_mask_to_model)
 
     def apply_pre_init(self, pre_init):
         # pre_init is a dict. Keys are strings that represent layer names. Values are weights
@@ -38,7 +40,7 @@ class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
             if pre_init.get(name) is not None:
                 param.data = pre_init[name]
 
-    def apply_mask(self, *args, **kwargs):
+    def apply_mask_to_model(self, *args, **kwargs):
         mask_dict = self.mask_dict
         if mask_dict is None:
             return
@@ -53,6 +55,19 @@ class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
             return
         else:
             param.data = param.data * mask.float()
+
+    def get_percent_weights_masked(self):
+        if not self.mask_dict:
+            return 0
+
+        total_weights = 0
+        total_weights_masked = 0
+
+        for layer_name, mask in self.mask_dict.items():
+            total_weights += mask.shape[0] * mask.shape[1]
+            total_weights_masked += get_zero_count(mask)
+
+        return total_weights_masked/total_weights
 
     def forward(self, *args):
         raise NotImplementedError

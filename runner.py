@@ -7,6 +7,7 @@ from torch import nn
 from torchvision.transforms import transforms
 
 import hyperparameter_presets
+import matplotlib.pyplot as plt
 
 # A helper class that takes a model and dataset, and runs the experiment on it.
 from networks import FullyConnectedMNIST
@@ -20,6 +21,7 @@ class ExperimentRunner:
     DEVICE = "device"
     ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS = "zero_percentage_in_initial_weights"
     ZERO_PERCENTAGE_IN_MASKS = "zero_percentage_in_masks"
+    PERCENTAGE_WEIGHT_MASKED = "percentage_weight_masked"
 
     def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
         self.model = model
@@ -29,10 +31,12 @@ class ExperimentRunner:
         self.batch_size = batch_size
         self.learning_rate_decay = learning_rate_decay
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.test_accuracies_per_pruning = []  # stores a tuple - (percent_weights_pruned, test_accuracy)
         self.stats = {
             self.DEVICE: str(self.device)
         }
         self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
+        self.update_stat(self.PERCENTAGE_WEIGHT_MASKED, self.model.get_percent_weights_masked())
 
     def print_stats(self):
         print(self.stats)
@@ -144,10 +148,17 @@ class ExperimentRunner:
         return mask_dict
 
     def prune(self, mask_dict, prune_percent=0.1):
+        # Use the best model obtained through early stopping. Weights are in the file temp.ckpt
+        # TODO: Make this more elegant - do not hardcode the file name
+        best_model = FullyConnectedMNIST(self.model.input_size, self.model.hidden_sizes, self.model.num_classes)
+        if torch.cuda.is_available():
+            best_model.cuda()
+        best_model.load_state_dict(torch.load('temp.ckpt'))
+
         # We assume that all layers are pruned by the same percentage
         # Yes, we prune per layer, not globally
 
-        for name, parameter in self.model.named_parameters():
+        for name, parameter in best_model.named_parameters():
             # TODO: Check if we should indeed ignore the bias
             if name.endswith('weight'):
                 current_mask = mask_dict.get(name, None)
@@ -224,6 +235,9 @@ def mnist_experiment():
     num_epochs = 15
     prune_percent = 0.1
 
+    test_accuracies = []
+    percent_weight_masked_list = []
+
     experiment = ExperimentRunner(model, num_epochs=num_epochs)
 
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
@@ -238,10 +252,12 @@ def mnist_experiment():
     # 4. Check the test accuracy of the pruned network on the test data set.
 
     mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-    experiment.print_stats()
+    # experiment.print_stats()
+    test_accuracies.append(experiment.stats[ExperimentRunner.TEST_ACCURACY])
+    percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
 
     # For a max pruning of 18 * 0.05 = 90%
-    pruning_iterations = 18
+    pruning_iterations = 20
     for i in range(1, pruning_iterations):
         initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
         new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
@@ -251,7 +267,15 @@ def mnist_experiment():
         experiment.train(input_size, mnist_train_loader, mnist_val_loader)
         experiment.test(input_size, mnist_test_loader)
         mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-        experiment.print_stats()
+        test_accuracies.append(experiment.stats[ExperimentRunner.TEST_ACCURACY])
+        percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
+        # experiment.print_stats()
+
+    percent_weights = [percent for percent in percent_weight_masked_list]
+    accuracies = [accuracy for accuracy in test_accuracies]
+
+    plt.plot(percent_weights, accuracies)
+    plt.savefig("graph.png")
 
 
 if __name__ == "__main__":
