@@ -211,7 +211,7 @@ def mnist_experiment():
     # Temporary parameters. Should probably move this to the hyper parameters file as well
     num_training = 58000
     num_validation = 2000
-    batch_size = 200
+    batch_size = 60
 
     # Prepare the dataset
     to_tensor_transform = transforms.Compose([transforms.ToTensor()])
