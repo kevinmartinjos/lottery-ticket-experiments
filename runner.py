@@ -136,7 +136,7 @@ class ExperimentRunner:
 
             test_accuracy = 100 * correct / total
             print('Test accuracy is: {} %'.format(test_accuracy))
-            print('Best validation accuracy is: {} %'.format(self.stats[self.BEST_VALIDATION_ACCURACY] * 100))
+            print('Best validation accuracy is: {} %'.format(self.stats[self.BEST_VALIDATION_ACCURACY]))
         self.update_stat(self.TEST_ACCURACY, test_accuracy)
         return test_accuracy
 
