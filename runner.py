@@ -238,7 +238,7 @@ def mnist_experiment():
     test_accuracies = []
     percent_weight_masked_list = []
 
-    experiment = ExperimentRunner(model, num_epochs=num_epochs)
+    experiment = ExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs)
 
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
     experiment.test(input_size, mnist_test_loader)
@@ -263,7 +263,7 @@ def mnist_experiment():
         new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
         if torch.cuda.is_available():
             new_model.cuda()
-        experiment = ExperimentRunner(new_model, num_epochs=num_epochs)
+        experiment = ExperimentRunner(new_model, batch_size=batch_size, num_epochs=num_epochs)
         experiment.train(input_size, mnist_train_loader, mnist_val_loader)
         experiment.test(input_size, mnist_test_loader)
         mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
