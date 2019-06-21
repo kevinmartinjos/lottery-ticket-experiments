@@ -88,11 +88,16 @@ class FullyConnectedMNIST(LotteryExperimentNetwork):
         layers = []
 
         # So that we can iterate through the layer_sizes
-        layer_sizes = [self.input_size] + self.hidden_sizes + [self.num_classes]
+        layer_sizes = [self.input_size] + self.hidden_sizes
 
         for i in range(0, len(layer_sizes) - 1):
             layers.append(nn.Linear(layer_sizes[i], layer_sizes[i + 1]))
             layers.append(nn.ReLU())
+
+        self.output_layer = nn.Linear(layer_sizes[i+1], self.num_classes)
+        layers.append(self.output_layer)
+        self.output_relu = nn.ReLU()
+        layers.append(self.output_relu)
 
         return nn.Sequential(*layers)
 

@@ -18,6 +18,7 @@ class ExperimentRunner:
     TRAINING_DURATION_SECONDS = "training_duration_seconds"
     FINAL_VALIDATION_ACCURACY = "final_validation_accuracy"
     TEST_ACCURACY = "test_accuracy"
+    BEST_VALIDATION_ACCURACY = " best_validation_accuracy"
     DEVICE = "device"
     ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS = "zero_percentage_in_initial_weights"
     ZERO_PERCENTAGE_IN_MASKS = "zero_percentage_in_masks"
@@ -31,7 +32,6 @@ class ExperimentRunner:
         self.batch_size = batch_size
         self.learning_rate_decay = learning_rate_decay
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.test_accuracies_per_pruning = []  # stores a tuple - (percent_weights_pruned, test_accuracy)
         self.stats = {
             self.DEVICE: str(self.device)
         }
@@ -68,11 +68,12 @@ class ExperimentRunner:
                 optimizer.step()
 
             # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch + 1, self.num_epochs, loss.item()))
-            lr = self.learning_rate * self.learning_rate_decay
-            self.update_lr(optimizer, lr)
+            # lr = self.learning_rate * self.learning_rate_decay
+            # self.update_lr(optimizer, lr)
             validation_accuracy = self.validate(input_size, validation_dataloader)
             if validation_accuracy > best_validation_accuracy_so_far:
                 best_validation_accuracy_so_far = validation_accuracy
+                self.update_stat(self.BEST_VALIDATION_ACCURACY, best_validation_accuracy_so_far)
                 torch.save(self.model.state_dict(), 'temp.ckpt')
 
         self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
@@ -135,7 +136,7 @@ class ExperimentRunner:
 
             test_accuracy = 100 * correct / total
             print('Test accuracy is: {} %'.format(test_accuracy))
-
+            print('Best validation accuracy is: {} %'.format(self.stats[self.BEST_VALIDATION_ACCURACY] * 100))
         self.update_stat(self.TEST_ACCURACY, test_accuracy)
         return test_accuracy
 
@@ -162,7 +163,12 @@ class ExperimentRunner:
             # TODO: Check if we should indeed ignore the bias
             if name.endswith('weight'):
                 current_mask = mask_dict.get(name, None)
-                new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
+                if name == 'output_layer.weight':
+                    # Last layer always has a different prune rate
+                    # TODO: Since this is model specific, move the prune() method to the neural network class
+                    new_mask = self.get_new_mask(prune_percent/2, parameter.data, current_mask)
+                else:
+                    new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
                 mask_dict[name] = new_mask
 
         self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
@@ -207,11 +213,16 @@ def mnist_experiment():
     num_classes = hyperparameter_presets.FULLY_CONNECTED_MNIST['num_classes']
     input_size = hyperparameter_presets.FULLY_CONNECTED_MNIST['input_size']
     hidden_sizes = hyperparameter_presets.FULLY_CONNECTED_MNIST['hidden_sizes']
+    batch_size = hyperparameter_presets.FULLY_CONNECTED_MNIST['batch_size']
+    learning_rate = hyperparameter_presets.FULLY_CONNECTED_MNIST['learning_rate']
+    num_epochs = hyperparameter_presets.FULLY_CONNECTED_MNIST['epochs']
+    prune_percent = hyperparameter_presets.FULLY_CONNECTED_MNIST['prune_percent']
+    pruning_iterations = hyperparameter_presets.FULLY_CONNECTED_MNIST['prune_iterations']
 
     # Temporary parameters. Should probably move this to the hyper parameters file as well
-    num_training = 58000
-    num_validation = 2000
-    batch_size = 200
+    num_training = 55000
+    num_validation = 5000
+
 
     # Prepare the dataset
     to_tensor_transform = transforms.Compose([transforms.ToTensor()])
@@ -231,14 +242,9 @@ def mnist_experiment():
     if torch.cuda.is_available():
         model.cuda()
 
-    # Experiment config
-    num_epochs = 15
-    prune_percent = 0.1
-
-    test_accuracies = []
+    validation_accuracies = []
     percent_weight_masked_list = []
-
-    experiment = ExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs)
+    experiment = ExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
 
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
     experiment.test(input_size, mnist_test_loader)
@@ -253,28 +259,28 @@ def mnist_experiment():
 
     mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
     # experiment.print_stats()
-    test_accuracies.append(experiment.stats[ExperimentRunner.TEST_ACCURACY])
+    validation_accuracies.append(experiment.stats[ExperimentRunner.BEST_VALIDATION_ACCURACY])
     percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
 
-    # For a max pruning of 18 * 0.05 = 90%
-    pruning_iterations = 20
     for i in range(1, pruning_iterations):
         initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
         new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
         if torch.cuda.is_available():
             new_model.cuda()
-        experiment = ExperimentRunner(new_model, batch_size=batch_size, num_epochs=num_epochs)
+        experiment = ExperimentRunner(new_model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
         experiment.train(input_size, mnist_train_loader, mnist_val_loader)
         experiment.test(input_size, mnist_test_loader)
         mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-        test_accuracies.append(experiment.stats[ExperimentRunner.TEST_ACCURACY])
+        validation_accuracies.append(experiment.stats[ExperimentRunner.BEST_VALIDATION_ACCURACY])
         percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
         # experiment.print_stats()
 
+    # TODO: Refactor so that experiment.plot() can do this
     percent_weights = [percent for percent in percent_weight_masked_list]
-    accuracies = [accuracy for accuracy in test_accuracies]
-
+    accuracies = [accuracy for accuracy in validation_accuracies]
     plt.plot(percent_weights, accuracies)
+    plt.xlabel('percentage of weights pruned')
+    plt.ylabel('Early stopping val acc.')
     plt.savefig("graph.png")
 
 
