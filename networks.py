@@ -23,7 +23,6 @@ class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
         super(LotteryExperimentNetwork, self).__init__()
         self.mask_dict = mask_dict
         self.pre_init = pre_init
-        self.apply_pre_init(pre_init)
 
         # Just making sure that the masks are applied before each forward pass
         # Perhaps we just have to do it once in the beginning and that's all
@@ -35,10 +34,7 @@ class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
         self.register_forward_pre_hook(self.apply_mask_to_model)
 
     def apply_pre_init(self, pre_init):
-        # pre_init is a dict. Keys are strings that represent layer names. Values are weights
-        for name, param in self.named_parameters():
-            if pre_init.get(name) is not None:
-                param.data = pre_init[name]
+        raise NotImplementedError
 
     def apply_mask_to_model(self, *args, **kwargs):
         mask_dict = self.mask_dict
@@ -82,6 +78,7 @@ class FullyConnectedMNIST(LotteryExperimentNetwork):
         self.pre_init = pre_init
         self.mask_dict = mask_dict
         self.layers = self.create_layers()
+        self.apply_pre_init(pre_init)
         self.initial_weights = self.retrieve_initial_weights()
 
     def create_layers(self):
@@ -113,7 +110,7 @@ class FullyConnectedMNIST(LotteryExperimentNetwork):
         if pre_init is None:
             self.apply(self.weights_init)
         else:
-            super(FullyConnectedMNIST, self).apply_pre_init(pre_init)
+            self.load_state_dict(pre_init, strict=False)
 
     def forward(self, x):
         return self.layers(x)
