@@ -6,7 +6,7 @@ FULLY_CONNECTED_MNIST = {
     'num_classes': 10,
     'batch_size': 100,
     'learning_rate': 0.0012,
-    'epochs': 10,
+    'epochs': 30,
     'prune_percent': 0.2,
     'prune_iterations': 20
 }
