@@ -1,6 +1,8 @@
 import time
 import torch
 import torchvision
+import json
+import argparse
 
 from tqdm import tqdm
 from torch import nn
@@ -25,24 +27,34 @@ class ExperimentRunner:
     PERCENTAGE_WEIGHT_MASKED = "percentage_weight_masked"
 
     def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
-        self.model = model
         self.learning_rate = learning_rate
         self.reg = 0.001  # Should this be a hyper parameter?
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.learning_rate_decay = learning_rate_decay
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.stats = {
-            self.DEVICE: str(self.device)
-        }
+        self.stats = []  # Should be an array of dicts
+        self.set_model(model)
+        self.model = model  # redundant, I know
+
+    def set_model(self, model):
+        # The model associated with the experiment keeps changing as we iteratively prune.
+        self.model = model
+        self.stats.append(dict())  # For storing the stats related to the new model
         self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
         self.update_stat(self.PERCENTAGE_WEIGHT_MASKED, self.model.get_percent_weights_masked())
 
+    def get_stat(self, param):
+        # Gets the param from the latest entry in the stats array
+        return self.stats[-1][param]
+
     def print_stats(self):
-        print(self.stats)
+        with open('result.json', 'w') as outfile:
+            json.dump(self.stats, outfile)
 
     def update_stat(self, stat_name, value):
-        self.stats[stat_name] = value
+        stat = self.stats[-1]
+        stat[stat_name] = value
 
     @staticmethod
     def update_lr(optimizer, lr):
@@ -136,7 +148,7 @@ class ExperimentRunner:
 
             test_accuracy = 100 * correct / total
             print('Test accuracy is: {} %'.format(test_accuracy))
-            print('Best validation accuracy is: {} %'.format(self.stats[self.BEST_VALIDATION_ACCURACY]))
+            print('Best validation accuracy is: {} %'.format(self.get_stat(self.BEST_VALIDATION_ACCURACY)))
         self.update_stat(self.TEST_ACCURACY, test_accuracy)
         return test_accuracy
 
@@ -208,6 +220,14 @@ class ExperimentRunner:
 
         return zeros_info_dict
 
+    def plot(self):
+        percent_weights = [stat[self.PERCENTAGE_WEIGHT_MASKED] for stat in self.stats]
+        accuracies = [stat[self.BEST_VALIDATION_ACCURACY] for stat in self.stats]
+        plt.plot(percent_weights, accuracies)
+        plt.xlabel('percentage of weights pruned')
+        plt.ylabel('Early stopping val acc.')
+        plt.savefig("graph.png")
+
 
 def mnist_experiment():
     num_classes = hyperparameter_presets.FULLY_CONNECTED_MNIST['num_classes']
@@ -222,7 +242,6 @@ def mnist_experiment():
     # Temporary parameters. Should probably move this to the hyper parameters file as well
     num_training = 55000
     num_validation = 5000
-
 
     # Prepare the dataset
     to_tensor_transform = transforms.Compose([transforms.ToTensor()])
@@ -242,8 +261,6 @@ def mnist_experiment():
     if torch.cuda.is_available():
         model.cuda()
 
-    validation_accuracies = []
-    percent_weight_masked_list = []
     experiment = ExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
 
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
@@ -259,35 +276,32 @@ def mnist_experiment():
 
     mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
     # experiment.print_stats()
-    validation_accuracies.append(experiment.stats[ExperimentRunner.BEST_VALIDATION_ACCURACY])
-    percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
 
     for i in range(1, pruning_iterations):
         initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
         new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
         if torch.cuda.is_available():
             new_model.cuda()
-        experiment = ExperimentRunner(new_model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
+        experiment.set_model(new_model)
         experiment.train(input_size, mnist_train_loader, mnist_val_loader)
         experiment.test(input_size, mnist_test_loader)
         try:
             mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-            validation_accuracies.append(experiment.stats[ExperimentRunner.BEST_VALIDATION_ACCURACY])
-            percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
         except IndexError:
             # Can happen when we try to prune too much
             break
-        # experiment.print_stats()
 
-    # TODO: Refactor so that experiment.plot() can do this
-    percent_weights = [percent for percent in percent_weight_masked_list]
-    accuracies = [accuracy for accuracy in validation_accuracies]
-    plt.plot(percent_weights, accuracies)
-    plt.xlabel('percentage of weights pruned')
-    plt.ylabel('Early stopping val acc.')
-    plt.savefig("graph.png")
-
+    experiment.plot()
+    experiment.print_stats()
 
 if __name__ == "__main__":
-    mnist_experiment()
+    parser = argparse.ArgumentParser(description='Run lottery ticket experiments')
+    parser.add_argument('--experiment', help='Name of the experiment')
 
+    args = parser.parse_args()
+    if args.experiment == 'mnist':
+        mnist_experiment()
+    elif args.experiment == 'shufflenet':
+        print("Not yet implemented")
+    else:
+        print("Invalid value for 'experiment'")
