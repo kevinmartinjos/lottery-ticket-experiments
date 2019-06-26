@@ -270,9 +270,13 @@ def mnist_experiment():
         experiment = ExperimentRunner(new_model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
         experiment.train(input_size, mnist_train_loader, mnist_val_loader)
         experiment.test(input_size, mnist_test_loader)
-        mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-        validation_accuracies.append(experiment.stats[ExperimentRunner.BEST_VALIDATION_ACCURACY])
-        percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
+        try:
+            mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
+            validation_accuracies.append(experiment.stats[ExperimentRunner.BEST_VALIDATION_ACCURACY])
+            percent_weight_masked_list.append(experiment.stats[ExperimentRunner.PERCENTAGE_WEIGHT_MASKED])
+        except IndexError:
+            # Can happen when we try to prune too much
+            break
         # experiment.print_stats()
 
     # TODO: Refactor so that experiment.plot() can do this
