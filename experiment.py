@@ -79,7 +79,6 @@ def mnist_experiment():
 def shufflenet_experiment():
     num_classes = hyperparameter_presets.SHUFFLENET['num_classes']
     input_size = hyperparameter_presets.SHUFFLENET['input_size']
-    hidden_sizes = hyperparameter_presets.SHUFFLENET['hidden_sizes']
     batch_size = hyperparameter_presets.SHUFFLENET['batch_size']
     learning_rate = hyperparameter_presets.SHUFFLENET['learning_rate']
     num_epochs = hyperparameter_presets.SHUFFLENET['epochs']
