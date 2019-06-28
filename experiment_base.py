@@ -2,18 +2,15 @@ import time
 import torch
 import torchvision
 import json
-import argparse
 
 from tqdm import tqdm
 from torch import nn
-from torchvision.transforms import transforms
 
-import hyperparameter_presets
 import matplotlib.pyplot as plt
 
 # A helper class that takes a model and dataset, and runs the experiment on it.
-from networks import FullyConnectedMNIST
-from utils import get_zero_count, apply_mask_dict_to_weight_dict
+from networks import FullyConnectedMNIST, ShuffleNet
+from utils import get_zero_count
 
 
 class ExperimentRunner:
@@ -41,8 +38,10 @@ class ExperimentRunner:
         # The model associated with the experiment keeps changing as we iteratively prune.
         self.model = model
         self.stats.append(dict())  # For storing the stats related to the new model
-        self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
-        self.update_stat(self.PERCENTAGE_WEIGHT_MASKED, self.model.get_percent_weights_masked())
+
+        # TODO: Refactor so as to make this work for higher dimensional tensors
+        # self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
+        # self.update_stat(self.PERCENTAGE_WEIGHT_MASKED, self.model.get_percent_weights_masked())
 
     def get_stat(self, param):
         # Gets the param from the latest entry in the stats array
@@ -60,6 +59,77 @@ class ExperimentRunner:
     def update_lr(optimizer, lr):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
+
+    def train(self, input_size, train_dataloader, validation_dataloader):
+        # TODO: Must return the best validation accuracy (early stopping_
+        # TODO: Must automatically update self.stats without the child class being aware of it
+        raise NotImplementedError
+
+    def validate(self, input_size, validation_dataloader):
+        # TODO: Must automatically update self.stats without the child class being aware of it
+        raise NotImplementedError
+
+    def test(self, input_size, test_dataloader):
+        # TODO: Must automatically update self.stats without the child class being aware of it
+        raise NotImplementedError
+
+    def prune(self, mask_dict, prune_percent=0.1):
+        raise NotImplementedError
+
+    def get_initial_mask(self):
+        mask_dict = dict()
+        for name, parameter in self.model.named_parameters():
+            if name.endswith('weight'):
+                mask_dict[name] = torch.ones(parameter.data.shape)
+
+        return mask_dict
+
+    @staticmethod
+    def get_new_mask(prune_percent, data, current_mask):
+        # I hate this if statement as much as you do. Currently there's no easy way to switch between CPU and GPU
+        if torch.cuda.is_available():
+            sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask.cuda().byte()))).values
+            cutoff_index = int(torch.tensor(prune_percent * len(sorted_weights)).round())
+            cutoff = sorted_weights[cutoff_index]
+            return torch.where(torch.abs(data) <= cutoff, torch.zeros(current_mask.shape, dtype=torch.float).cuda(),
+                               current_mask.cuda())
+        else:
+            sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask.byte()))).values
+            cutoff_index = int(torch.tensor(prune_percent * len(sorted_weights)).round())
+            cutoff = sorted_weights[cutoff_index]
+            return torch.where(torch.abs(data) <= cutoff, torch.zeros(current_mask.shape, dtype=torch.float),
+                               current_mask)
+
+    def get_zero_count_in_weights(self):
+        # In each linear layer in the network, count the number of zeros. Useful for debugging
+        zeros_info_dict = dict()
+
+        for name, param in self.model.named_parameters():
+            if name.endswith('weight'):
+                zeros_info_dict[name] = get_zero_count(param.data)/(param.data.shape[0] * param.data.shape[1])
+
+        return zeros_info_dict
+
+    def get_zero_count_in_mask(self, mask_dict):
+        zeros_info_dict = dict()
+
+        for name, data in mask_dict.items():
+            zeros_info_dict[name] = get_zero_count(data)/(data.shape[0] * data.shape[1])
+
+        return zeros_info_dict
+
+    def plot(self):
+        percent_weights = [stat[self.PERCENTAGE_WEIGHT_MASKED] for stat in self.stats]
+        accuracies = [stat[self.BEST_VALIDATION_ACCURACY] for stat in self.stats]
+        plt.plot(percent_weights, accuracies)
+        plt.xlabel('percentage of weights pruned')
+        plt.ylabel('Early stopping val acc.')
+        plt.savefig("graph.png")
+
+
+class MNISTExperimentRunner(ExperimentRunner):
+    def __init__(self, *args, **kwargs):
+        super(MNISTExperimentRunner, self).__init__(*args, **kwargs)
 
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
@@ -152,14 +222,6 @@ class ExperimentRunner:
         self.update_stat(self.TEST_ACCURACY, test_accuracy)
         return test_accuracy
 
-    def get_initial_mask(self):
-        mask_dict = dict()
-        for name, parameter in self.model.named_parameters():
-            if name.endswith('weight'):
-                mask_dict[name] = torch.ones(parameter.data.shape)
-
-        return mask_dict
-
     def prune(self, mask_dict, prune_percent=0.1):
         # Use the best model obtained through early stopping. Weights are in the file temp.ckpt
         # TODO: Make this more elegant - do not hardcode the file name
@@ -186,122 +248,67 @@ class ExperimentRunner:
         self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
         return mask_dict
 
-    @staticmethod
-    def get_new_mask(prune_percent, data, current_mask):
-        # I hate this if statement as much as you do. Currently there's no easy way to switch between CPU and GPU
-        if torch.cuda.is_available():
-            sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask.cuda().byte()))).values
-            cutoff_index = int(torch.tensor(prune_percent * len(sorted_weights)).round())
-            cutoff = sorted_weights[cutoff_index]
-            return torch.where(torch.abs(data) <= cutoff, torch.zeros(current_mask.shape, dtype=torch.float).cuda(),
-                               current_mask.cuda())
-        else:
-            sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask.byte()))).values
-            cutoff_index = int(torch.tensor(prune_percent * len(sorted_weights)).round())
-            cutoff = sorted_weights[cutoff_index]
-            return torch.where(torch.abs(data) <= cutoff, torch.zeros(current_mask.shape, dtype=torch.float),
-                               current_mask)
 
-    def get_zero_count_in_weights(self):
-        # In each linear layer in the network, count the number of zeros. Useful for debugging
-        zeros_info_dict = dict()
+class ShuffleNetExperimentRunner(ExperimentRunner):
+    def __init__(self, *args, **kwargs):
+        super(ShuffleNetExperimentRunner, self).__init__(*args, **kwargs)
 
-        for name, param in self.model.named_parameters():
-            if name.endswith('weight'):
-                zeros_info_dict[name] = get_zero_count(param.data)/(param.data.shape[0] * param.data.shape[1])
+    def train(self, input_size, train_dataloader, validation_dataloader):
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
 
-        return zeros_info_dict
+        training_start_time = time.time()
+        best_validation_accuracy_so_far = 0
+        for epoch in range(self.num_epochs):
+            for i, (images, labels) in tqdm(enumerate(train_dataloader)):
+                # Move tensors to the configured device
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+                optimizer.zero_grad()
+                output = self.model(images)
+                loss = criterion(output, labels)
+                loss.backward()
+                optimizer.step()
 
-    def get_zero_count_in_mask(self, mask_dict):
-        zeros_info_dict = dict()
+            # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch + 1, self.num_epochs, loss.item()))
+            # lr = self.learning_rate * self.learning_rate_decay
+            # self.update_lr(optimizer, lr)
+            validation_accuracy = self.validate(input_size, validation_dataloader)
+            if validation_accuracy > best_validation_accuracy_so_far:
+                best_validation_accuracy_so_far = validation_accuracy
+                self.update_stat(self.BEST_VALIDATION_ACCURACY, best_validation_accuracy_so_far)
+                torch.save(self.model.state_dict(), 'temp.ckpt')
 
-        for name, data in mask_dict.items():
-            zeros_info_dict[name] = get_zero_count(data)/(data.shape[0] * data.shape[1])
+        self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
+        self.update_stat(self.FINAL_VALIDATION_ACCURACY, validation_accuracy)
 
-        return zeros_info_dict
+    def validate(self, input_size, validation_dataloader):
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in validation_dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
 
-    def plot(self):
-        percent_weights = [stat[self.PERCENTAGE_WEIGHT_MASKED] for stat in self.stats]
-        accuracies = [stat[self.BEST_VALIDATION_ACCURACY] for stat in self.stats]
-        plt.plot(percent_weights, accuracies)
-        plt.xlabel('percentage of weights pruned')
-        plt.ylabel('Early stopping val acc.')
-        plt.savefig("graph.png")
+                scores = self.model.forward(images)
 
+                predicted = []
 
-def mnist_experiment():
-    num_classes = hyperparameter_presets.FULLY_CONNECTED_MNIST['num_classes']
-    input_size = hyperparameter_presets.FULLY_CONNECTED_MNIST['input_size']
-    hidden_sizes = hyperparameter_presets.FULLY_CONNECTED_MNIST['hidden_sizes']
-    batch_size = hyperparameter_presets.FULLY_CONNECTED_MNIST['batch_size']
-    learning_rate = hyperparameter_presets.FULLY_CONNECTED_MNIST['learning_rate']
-    num_epochs = hyperparameter_presets.FULLY_CONNECTED_MNIST['epochs']
-    prune_percent = hyperparameter_presets.FULLY_CONNECTED_MNIST['prune_percent']
-    pruning_iterations = hyperparameter_presets.FULLY_CONNECTED_MNIST['prune_iterations']
+                def get_class(x):
+                    return torch.argsort(x)[-1]
 
-    # Temporary parameters. Should probably move this to the hyper parameters file as well
-    num_training = 55000
-    num_validation = 5000
+                for i in range(0, len(scores)):
+                    predicted.append(get_class(scores[i]))
 
-    # Prepare the dataset
-    to_tensor_transform = transforms.Compose([transforms.ToTensor()])
-    mnist_dataset = torchvision.datasets.MNIST(root='datasets/', train=True, download=True, transform=to_tensor_transform)
-    mnist_test_dataset = torchvision.datasets.MNIST(root='datasets/', train=False, transform=to_tensor_transform)
-    mask = list(range(num_training))
-    mnist_train_dataset = torch.utils.data.Subset(mnist_dataset, mask)
-    mask = list(range(num_training, num_training + num_validation))
-    mnist_val_dataset = torch.utils.data.Subset(mnist_dataset, mask)
+                predicted = torch.stack(predicted)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            validation_accuracy = 100 * correct / total
 
-    # Load the dataset
-    mnist_train_loader = torch.utils.data.DataLoader(dataset=mnist_train_dataset, batch_size=batch_size, shuffle=True)
-    mnist_val_loader = torch.utils.data.DataLoader(dataset=mnist_val_dataset, batch_size=batch_size, shuffle=False)
-    mnist_test_loader = torch.utils.data.DataLoader(dataset=mnist_test_dataset, batch_size=batch_size, shuffle=False)
+        return validation_accuracy
 
-    model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes)
-    if torch.cuda.is_available():
-        model.cuda()
+    def test(self, input_size, test_dataloader):
+        pass
 
-    experiment = ExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
-
-    experiment.train(input_size, mnist_train_loader, mnist_val_loader)
-    experiment.test(input_size, mnist_test_loader)
-    mask_dict = experiment.get_initial_mask()
-
-    # I now have a mask and pre_init
-    # 1. Initialize another network with pre_init, and set a mask on it
-    # 2. while training, make sure that the weights are indeed 0 according to the mask - set a breakpoint
-    # after an epoch and verify this
-    # 3. Repeat 1 & 2 one more time
-    # 4. Check the test accuracy of the pruned network on the test data set.
-
-    mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-    # experiment.print_stats()
-
-    for i in range(1, pruning_iterations):
-        initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
-        new_model = FullyConnectedMNIST(input_size, hidden_sizes, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
-        if torch.cuda.is_available():
-            new_model.cuda()
-        experiment.set_model(new_model)
-        experiment.train(input_size, mnist_train_loader, mnist_val_loader)
-        experiment.test(input_size, mnist_test_loader)
-        try:
-            mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
-        except IndexError:
-            # Can happen when we try to prune too much
-            break
-
-    experiment.plot()
-    experiment.print_stats()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run lottery ticket experiments')
-    parser.add_argument('--experiment', help='Name of the experiment')
-
-    args = parser.parse_args()
-    if args.experiment == 'mnist':
-        mnist_experiment()
-    elif args.experiment == 'shufflenet':
-        print("Not yet implemented")
-    else:
-        print("Invalid value for 'experiment'")
+    def prune(self, mask_dict, prune_percent=0.1):
+        pass

@@ -145,7 +145,7 @@ class ShuffleNetUnit(nn.Module):
             - channel shuffle (not a layer, so would be omitted here)
             - Depthwise convolution
             - 1x1 group convolution
-            - Batch normalization and ReLus in between the above layers as applicable
+            - Batch normalization and ReLus in between the abotorch.Size([100, 24, 7, 7])ve layers as applicable
         """
 
         # bottle neck channel = input channel / 4, as the paper did
@@ -160,14 +160,21 @@ class ShuffleNetUnit(nn.Module):
         )
         self.bn_dw = nn.BatchNorm2d(neck_channel_size)
 
-        self.gconv2 = nn.Conv2d(
-            neck_channel_size, self.output_size - self.input_size, groups=1, kernel_size=1, bias=False
-        )
-        self.bn2 = nn.BatchNorm2d(self.output_size - self.input_size)
+        if self.do_concat:
+            self.gconv2 = nn.Conv2d(
+                neck_channel_size, self.output_size - self.input_size, groups=1, kernel_size=1, bias=False
+            )
+            self.bn2 = nn.BatchNorm2d(self.output_size - self.input_size)
+        else:
+            # TODO: Figure out why we need self.output_size - self.input_size for the stride=2 unit
+            self.gconv2 = nn.Conv2d(
+                neck_channel_size, self.output_size, groups=1, kernel_size=1, bias=False
+            )
+            self.bn2 = nn.BatchNorm2d(self.output_size)
 
         # Not shuffling
         # for channel shuffle operation
-        self.n = neck_channel_size / self.g  # self.g is hard coded to be 1 for the time being
+        self.n = int(neck_channel_size / self.g)  # self.g is hard coded to be 1 for the time being
         # self.g, self.n = g, neck_channel / g
         # assert self.n == int(self.n), "error shape to shuffle"
 
@@ -210,7 +217,7 @@ class ShuffleNet(LotteryExperimentNetwork):
 
     def create_layers(self):
         # Refer to table 1 in the shuffle net paper. The layers are created in the order mentioned in the table
-        self.conv_1 = nn.Conv2d(3, 24, kernel_size=3, padding=1, stride=2, bias=False)
+        self.conv_1 = nn.Conv2d(3, 24, kernel_size=3, padding=1, stride=1, bias=False)
         self.bn_1 = nn.BatchNorm2d(24)
         self.max_pool_1 = nn.MaxPool2d(3, stride=2)  # TODO: Fix stride and padding if necessary
 
@@ -227,7 +234,7 @@ class ShuffleNet(LotteryExperimentNetwork):
 
     def build_stage(self, input_size, output_size, repeat=1):
         # According to the paper, each stage consists of 2 parts:
-        # 1. A shuffleNetUnit with stride=2 and repeat = 1, corresponding to (c) in figure 2
+        # 1. A shuffleNetUnit with stride=2 and repeat = x1, corresponding to (c) in figure 2
         # 1. A shuffleNetUnit with stride=1 and repeat = x, corresponding to (b) in figure 2
 
         stage = [ShuffleNetUnit(input_size, output_size, stride=2, do_concat=True)]
@@ -259,7 +266,7 @@ class ShuffleNet(LotteryExperimentNetwork):
     def forward(self, inputs):
         # first conv layer
         x = F.relu(self.bn_1(self.conv_1(inputs)))
-        x = self.max_pool_1(x)
+        # x = self.max_pool_1(x) TODO: Uncomment this?
 
         # bottlenecks
         x = self.stage_2(x)

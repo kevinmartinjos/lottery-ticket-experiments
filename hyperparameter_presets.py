@@ -10,3 +10,14 @@ FULLY_CONNECTED_MNIST = {
     'prune_percent': 0.2,
     'prune_iterations': 40
 }
+
+SHUFFLENET = {
+    'input_size': 32 * 32 * 3,
+    'hidden_sizes': [300, 100],
+    'num_classes': 10,
+    'batch_size': 100,
+    'learning_rate': 0.0012,
+    'epochs': 1,
+    'prune_percent': 0.2,
+    'prune_iterations': 40
+}
