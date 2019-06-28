@@ -259,8 +259,8 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
 
         training_start_time = time.time()
         best_validation_accuracy_so_far = 0
-        for epoch in range(self.num_epochs):
-            for i, (images, labels) in tqdm(enumerate(train_dataloader)):
+        for epoch in tqdm(range(self.num_epochs)):
+            for i, (images, labels) in enumerate(train_dataloader):
                 # Move tensors to the configured device
                 images = images.to(self.device)
                 labels = labels.to(self.device)
@@ -308,7 +308,37 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
         return validation_accuracy
 
     def test(self, input_size, test_dataloader):
-        pass
+        best_model = ShuffleNet(self.model.input_size, self.model.num_classes)
+        if torch.cuda.is_available():
+            best_model.cuda()
+        best_model.load_state_dict(torch.load('temp.ckpt'))
+
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in test_dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+
+                scores = best_model.forward(images)
+
+                predicted = []
+
+                def get_class(x):
+                    return torch.argsort(x)[-1]
+
+                for i in range(0, len(scores)):
+                    predicted.append(get_class(scores[i]))
+
+                predicted = torch.stack(predicted)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+            test_accuracy = 100 * correct / total
+            print('Test accuracy is: {} %'.format(test_accuracy))
+            print('Best validation accuracy is: {} %'.format(self.get_stat(self.BEST_VALIDATION_ACCURACY)))
+        self.update_stat(self.TEST_ACCURACY, test_accuracy)
+        return test_accuracy
 
     def prune(self, mask_dict, prune_percent=0.1):
         pass

@@ -129,6 +129,7 @@ def shufflenet_experiment():
     experiment = ShuffleNetExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
 
     experiment.train(input_size, train_loader, val_loader)
+    experiment.test()
     experiment.print_stats()
     # experiment.test(input_size, test_loader)
 
