@@ -3,7 +3,7 @@ import torch
 
 def get_zero_count(matrix):
     # A utility function to count the number of zeroes in a 2-D matrix
-    return torch.sum(matrix == 0)
+    return torch.sum(matrix == 0).item()
 
 
 def apply_mask_dict_to_weight_dict(mask_dict, weight_dict):

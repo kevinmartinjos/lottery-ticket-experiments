@@ -110,7 +110,7 @@ class ExperimentRunner:
         zeros_info_dict = dict()
 
         for name, data in mask_dict.items():
-            zeros_info_dict[name] = get_zero_count(data)/(data.shape[0] * data.shape[1])
+            zeros_info_dict[name] = get_zero_count(data)/data.numel()
 
         return zeros_info_dict
 
