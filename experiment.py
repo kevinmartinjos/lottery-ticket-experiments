@@ -5,7 +5,7 @@ import torchvision
 from torchvision.transforms import transforms
 
 import hyperparameter_presets
-from experiment_base import ExperimentRunner, ShuffleNetExperimentRunner
+from experiment_base import ExperimentRunner, ShuffleNetExperimentRunner, MNISTExperimentRunner
 from networks import FullyConnectedMNIST, ShuffleNet
 from utils import apply_mask_dict_to_weight_dict
 
@@ -42,7 +42,7 @@ def mnist_experiment():
     if torch.cuda.is_available():
         model.cuda()
 
-    experiment = ExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
+    experiment = MNISTExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
 
     experiment.train(input_size, mnist_train_loader, mnist_val_loader)
     experiment.test(input_size, mnist_test_loader)
@@ -129,8 +129,26 @@ def shufflenet_experiment():
 
     experiment.train(input_size, train_loader, val_loader)
     experiment.test(input_size, test_loader)
+
+    initial_mask_dict = experiment.get_initial_mask()
+    mask_dict = experiment.prune(initial_mask_dict, prune_percent=prune_percent)
+
+    for i in range(1, pruning_iterations):
+        initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
+        new_model = ShuffleNet(input_size, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
+        if torch.cuda.is_available():
+            new_model.cuda()
+        experiment.set_model(new_model)
+        experiment.train(input_size, train_loader, val_loader)
+        experiment.test(input_size, test_loader)
+        try:
+            mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
+        except IndexError:
+            # Can happen when we try to prune too much
+            break
+
+    experiment.plot()
     experiment.print_stats()
-    # experiment.test(input_size, test_loader)
 
 
 if __name__ == "__main__":

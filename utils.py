@@ -1,15 +1,9 @@
+import torch
+
+
 def get_zero_count(matrix):
     # A utility function to count the number of zeroes in a 2-D matrix
-    rows = len(matrix)
-    cols = len(matrix[0])
-    count = 0
-
-    for i in range(0, rows):
-        for j in range(0, cols):
-            if not matrix[i][j]:
-                count += 1
-
-    return count
+    return torch.sum(matrix == 0)
 
 
 def apply_mask_dict_to_weight_dict(mask_dict, weight_dict):

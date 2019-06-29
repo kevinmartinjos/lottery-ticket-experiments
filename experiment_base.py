@@ -40,8 +40,8 @@ class ExperimentRunner:
         self.stats.append(dict())  # For storing the stats related to the new model
 
         # TODO: Refactor so as to make this work for higher dimensional tensors
-        # self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
-        # self.update_stat(self.PERCENTAGE_WEIGHT_MASKED, self.model.get_percent_weights_masked())
+        self.update_stat(self.ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS, self.get_zero_count_in_weights())
+        self.update_stat(self.PERCENTAGE_WEIGHT_MASKED, self.model.get_percent_weights_masked())
 
     def get_stat(self, param):
         # Gets the param from the latest entry in the stats array
@@ -77,15 +77,11 @@ class ExperimentRunner:
         raise NotImplementedError
 
     def get_initial_mask(self):
-        mask_dict = dict()
-        for name, parameter in self.model.named_parameters():
-            if name.endswith('weight'):
-                mask_dict[name] = torch.ones(parameter.data.shape)
-
-        return mask_dict
+        raise NotImplementedError
 
     @staticmethod
     def get_new_mask(prune_percent, data, current_mask):
+        # Coincidentally, this works tensors of any dimensions - not just 2D matrices!
         # I hate this if statement as much as you do. Currently there's no easy way to switch between CPU and GPU
         if torch.cuda.is_available():
             sorted_weights = torch.sort(torch.abs(torch.masked_select(data, current_mask.cuda().byte()))).values
@@ -106,7 +102,7 @@ class ExperimentRunner:
 
         for name, param in self.model.named_parameters():
             if name.endswith('weight'):
-                zeros_info_dict[name] = get_zero_count(param.data)/(param.data.shape[0] * param.data.shape[1])
+                zeros_info_dict[name] = get_zero_count(param.data)/param.data.numel()
 
         return zeros_info_dict
 
@@ -130,6 +126,14 @@ class ExperimentRunner:
 class MNISTExperimentRunner(ExperimentRunner):
     def __init__(self, *args, **kwargs):
         super(MNISTExperimentRunner, self).__init__(*args, **kwargs)
+
+    def get_initial_mask(self):
+        mask_dict = dict()
+        for name, parameter in self.model.named_parameters():
+            if name.endswith('weight'):
+                mask_dict[name] = torch.ones(parameter.data.shape)
+
+        return mask_dict
 
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
@@ -253,6 +257,15 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
     def __init__(self, *args, **kwargs):
         super(ShuffleNetExperimentRunner, self).__init__(*args, **kwargs)
 
+    def get_initial_mask(self):
+        mask_dict = dict()
+        for name, parameter in self.model.named_parameters():
+            # Choosing weights of the convolutional and fully connected layers only. Skip biases and batch normalization
+            if 'weight' in name and ('conv' in name or 'fc' in name):
+                mask_dict[name] = torch.ones(parameter.data.shape)
+
+        return mask_dict
+
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
@@ -337,4 +350,26 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
         return test_accuracy
 
     def prune(self, mask_dict, prune_percent=0.1):
-        pass
+        # Use the best model obtained through early stopping. Weights are in the file temp.ckpt
+        # TODO: Make this more elegant - do not hardcode the file name
+        best_model = FullyConnectedMNIST(self.model.input_size, self.model.hidden_sizes, self.model.num_classes)
+        if torch.cuda.is_available():
+            best_model.cuda()
+        best_model.load_state_dict(torch.load('temp.ckpt'))
+
+        # We assume that all layers are pruned by the same percentage
+        # Yes, we prune per layer, not globally
+
+        for name, parameter in best_model.named_parameters():
+            # TODO: Check if we should indeed ignore the bias
+            if 'weight' in name and ('conv' in name or 'fc' in name):
+                current_mask = mask_dict.get(name, None)
+                if name == 'fc.weight':
+                    # Last layer always has a different prune rate
+                    new_mask = self.get_new_mask(prune_percent / 2, parameter.data, current_mask)
+                else:
+                    new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
+                mask_dict[name] = new_mask
+
+        self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
+        return mask_dict
