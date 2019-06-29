@@ -352,7 +352,7 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
     def prune(self, mask_dict, prune_percent=0.1):
         # Use the best model obtained through early stopping. Weights are in the file temp.ckpt
         # TODO: Make this more elegant - do not hardcode the file name
-        best_model = FullyConnectedMNIST(self.model.input_size, self.model.hidden_sizes, self.model.num_classes)
+        best_model = ShuffleNet(self.model.input_size, self.model.num_classes)
         if torch.cuda.is_available():
             best_model.cuda()
         best_model.load_state_dict(torch.load('temp.ckpt'))
