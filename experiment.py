@@ -86,8 +86,8 @@ def shufflenet_experiment():
     pruning_iterations = hyperparameter_presets.SHUFFLENET['prune_iterations']
 
     # Temporary parameters. Should probably move this to the hyper parameters file as well
-    num_training = 49000
-    num_validation = 1000
+    num_training = 45000
+    num_validation = 5000
 
     norm_transform = transforms.Compose([transforms.ToTensor(),
                                          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
