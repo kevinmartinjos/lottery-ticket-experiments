@@ -255,16 +255,10 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
 
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
-        # optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
-        optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-1, weight_decay=4e-5, momentum=0.9)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
         training_start_time = time.time()
         best_validation_accuracy_so_far = 0
         for epoch in tqdm(range(self.num_epochs)):
-            if epoch == 150:
-                optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-2, weight_decay=4e-5, momentum=0.9)
-            elif epoch == 225:
-                optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-3, weight_decay=4e-5, momentum=0.9)
-
             for i, (images, labels) in enumerate(train_dataloader):
                 # Move tensors to the configured device
                 images = images.to(self.device)
@@ -275,9 +269,6 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
                 loss.backward()
                 optimizer.step()
 
-            # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch + 1, self.num_epochs, loss.item()))
-            # lr = self.learning_rate * self.learning_rate_decay
-            # self.update_lr(optimizer, lr)
             validation_accuracy = self.validate(input_size, validation_dataloader)
             if validation_accuracy > best_validation_accuracy_so_far:
                 best_validation_accuracy_so_far = validation_accuracy
