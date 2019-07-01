@@ -64,7 +64,7 @@ class LotteryExperimentNetwork(nn.Module, NeuralNetUtilsMixin):
         total_weights_masked = 0
 
         for layer_name, mask in self.mask_dict.items():
-            total_weights += mask.shape[0] * mask.shape[1]
+            total_weights += mask.numels()
             total_weights_masked += get_zero_count(mask)
 
         return total_weights_masked/total_weights
