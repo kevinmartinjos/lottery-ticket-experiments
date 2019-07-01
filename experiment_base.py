@@ -261,7 +261,7 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
         mask_dict = dict()
         for name, parameter in self.model.named_parameters():
             # Choosing weights of the convolutional and fully connected layers only. Skip biases and batch normalization
-            if 'weight' in name and ('conv' in name or 'fc' in name):
+            if 'weight' in name:
                 mask_dict[name] = torch.ones(parameter.data.shape)
 
         return mask_dict
@@ -362,7 +362,7 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
 
         for name, parameter in best_model.named_parameters():
             # TODO: Check if we should indeed ignore the bias
-            if 'weight' in name and ('conv' in name or 'fc' in name):
+            if 'weight' in name:
                 current_mask = mask_dict.get(name, None)
                 if name == 'fc.weight':
                     # Last layer always has a different prune rate
