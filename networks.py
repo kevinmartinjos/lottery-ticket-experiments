@@ -299,7 +299,7 @@ class Conv2Net(LotteryExperimentNetwork):
         self.conv_2 = nn.Conv2d(64, 64, 3)
         self.max_pool = nn.MaxPool2d(3, stride=2)
 
-        self.linear_1 = nn.Linear(256, 256)
+        self.linear_1 = nn.Linear(64, 256)
         self.linear_2 = nn.Linear(256, 256)
         self.output = nn.Linear(256, self.num_classes)
 
@@ -320,4 +320,11 @@ class Conv2Net(LotteryExperimentNetwork):
             self.load_state_dict(pre_init, strict=False)
 
     def forward(self, x):
-        return self.layers(x)
+        x = self.conv_1(x)
+        x = self.conv_2(x)
+        x = self.max_pool(x)
+        x = x.view(-1, 64)
+        x = self.linear_1(x)
+        x = self.linear_2(x)
+        x = self.output(x)
+        return x
