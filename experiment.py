@@ -5,8 +5,9 @@ import torchvision
 from torchvision.transforms import transforms
 
 import hyperparameter_presets
-from experiment_base import ExperimentRunner, ShuffleNetExperimentRunner, MNISTExperimentRunner
-from networks import FullyConnectedMNIST, ShuffleNet
+from experiment_base import ExperimentRunner, ShuffleNetExperimentRunner, MNISTExperimentRunner, \
+    Conv2NetExperimentRunner
+from networks import FullyConnectedMNIST, ShuffleNet, Conv2Net
 from utils import apply_mask_dict_to_weight_dict
 
 
@@ -151,6 +152,81 @@ def shufflenet_experiment():
     experiment.print_stats()
 
 
+def conv2_experiment():
+    num_classes = hyperparameter_presets.CONV2['num_classes']
+    input_size = hyperparameter_presets.CONV2['input_size']
+    batch_size = hyperparameter_presets.CONV2['batch_size']
+    learning_rate = hyperparameter_presets.CONV2['learning_rate']
+    num_epochs = hyperparameter_presets.CONV2['epochs']
+    prune_percent = hyperparameter_presets.CONV2['prune_percent']
+    pruning_iterations = hyperparameter_presets.CONV2['prune_iterations']
+
+    # Temporary parameters. Should probably move this to the hyper parameters file as well
+    num_training = 45000
+    num_validation = 5000
+
+    norm_transform = transforms.Compose([transforms.ToTensor(),
+                                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                                         ])
+    test_transform = transforms.Compose([transforms.ToTensor(),
+                                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                                         ])
+    cifar_dataset = torchvision.datasets.CIFAR10(root='datasets/',
+                                                 train=True,
+                                                 transform=norm_transform,
+                                                 download=True)
+
+    test_dataset = torchvision.datasets.CIFAR10(root='datasets/',
+                                                train=False,
+                                                transform=test_transform
+                                                )
+
+    mask = list(range(num_training))
+    train_dataset = torch.utils.data.Subset(cifar_dataset, mask)
+    mask = list(range(num_training, num_training + num_validation))
+    val_dataset = torch.utils.data.Subset(cifar_dataset, mask)
+
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=True)
+
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
+                                             batch_size=batch_size,
+                                             shuffle=False)
+
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+                                              batch_size=batch_size,
+                                              shuffle=False)
+    model = Conv2Net(input_size, num_classes)
+    if torch.cuda.is_available():
+        model.cuda()
+
+    experiment = Conv2NetExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
+
+    experiment.train(input_size, train_loader, val_loader)
+    experiment.test(input_size, test_loader)
+
+    initial_mask_dict = experiment.get_initial_mask()
+    mask_dict = experiment.prune(initial_mask_dict, prune_percent=prune_percent)
+
+    for i in range(1, pruning_iterations):
+        initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
+        new_model = Conv2Net(input_size, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
+        if torch.cuda.is_available():
+            new_model.cuda()
+        experiment.set_model(new_model)
+        experiment.train(input_size, train_loader, val_loader)
+        experiment.test(input_size, test_loader)
+        try:
+            mask_dict = experiment.prune(mask_dict, prune_percent=prune_percent)
+        except IndexError:
+            # Can happen when we try to prune too much
+            break
+
+    experiment.plot()
+    experiment.print_stats()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run lottery ticket experiments')
     parser.add_argument('--experiment', help='Name of the experiment')
@@ -160,5 +236,7 @@ if __name__ == "__main__":
         mnist_experiment()
     elif args.experiment == 'shufflenet':
         shufflenet_experiment()
+    elif args.experiment == 'conv2':
+        conv2_experiment()
     else:
         print("Invalid value for 'experiment'")

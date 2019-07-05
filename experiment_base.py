@@ -9,7 +9,7 @@ from torch import nn
 import matplotlib.pyplot as plt
 
 # A helper class that takes a model and dataset, and runs the experiment on it.
-from networks import FullyConnectedMNIST, ShuffleNet
+from networks import FullyConnectedMNIST, ShuffleNet, Conv2Net
 from utils import get_zero_count
 
 
@@ -77,7 +77,12 @@ class ExperimentRunner:
         raise NotImplementedError
 
     def get_initial_mask(self):
-        raise NotImplementedError
+        mask_dict = dict()
+        for name, parameter in self.model.named_parameters():
+            if name.endswith('weight'):
+                mask_dict[name] = torch.ones(parameter.data.shape)
+
+        return mask_dict
 
     @staticmethod
     def get_new_mask(prune_percent, data, current_mask):
@@ -126,14 +131,6 @@ class ExperimentRunner:
 class MNISTExperimentRunner(ExperimentRunner):
     def __init__(self, *args, **kwargs):
         super(MNISTExperimentRunner, self).__init__(*args, **kwargs)
-
-    def get_initial_mask(self):
-        mask_dict = dict()
-        for name, parameter in self.model.named_parameters():
-            if name.endswith('weight'):
-                mask_dict[name] = torch.ones(parameter.data.shape)
-
-        return mask_dict
 
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
@@ -257,15 +254,6 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
     def __init__(self, *args, **kwargs):
         super(ShuffleNetExperimentRunner, self).__init__(*args, **kwargs)
 
-    def get_initial_mask(self):
-        mask_dict = dict()
-        for name, parameter in self.model.named_parameters():
-            # Choosing weights of the convolutional and fully connected layers only. Skip biases and batch normalization
-            if 'weight' in name:
-                mask_dict[name] = torch.ones(parameter.data.shape)
-
-        return mask_dict
-
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
@@ -368,6 +356,120 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
                     # Last layer always has a different prune rate
                     new_mask = self.get_new_mask(prune_percent / 2, parameter.data, current_mask)
                 else:
+                    new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
+                mask_dict[name] = new_mask
+
+        self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
+        return mask_dict
+
+
+class Conv2NetExperimentRunner(ExperimentRunner):
+    def __init__(self, *args, **kwargs):
+        super(Conv2NetExperimentRunner, self).__init__(*args, **kwargs)
+
+    def train(self, input_size, train_dataloader, validation_dataloader):
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
+        training_start_time = time.time()
+        best_validation_accuracy_so_far = 0
+        for epoch in tqdm(range(self.num_epochs)):
+            for i, (images, labels) in enumerate(train_dataloader):
+                # Move tensors to the configured device
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+                optimizer.zero_grad()
+                output = self.model(images)
+                loss = criterion(output, labels)
+                loss.backward()
+                optimizer.step()
+
+            validation_accuracy = self.validate(input_size, validation_dataloader)
+            if validation_accuracy > best_validation_accuracy_so_far:
+                best_validation_accuracy_so_far = validation_accuracy
+                self.update_stat(self.BEST_VALIDATION_ACCURACY, best_validation_accuracy_so_far)
+                torch.save(self.model.state_dict(), 'temp.ckpt')
+
+        self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
+        self.update_stat(self.FINAL_VALIDATION_ACCURACY, validation_accuracy)
+
+    def validate(self, input_size, validation_dataloader):
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in validation_dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+
+                scores = self.model.forward(images)
+
+                predicted = []
+
+                def get_class(x):
+                    return torch.argsort(x)[-1]
+
+                for i in range(0, len(scores)):
+                    predicted.append(get_class(scores[i]))
+
+                predicted = torch.stack(predicted)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            validation_accuracy = 100 * correct / total
+
+        return validation_accuracy
+
+    def test(self, input_size, test_dataloader):
+        best_model = Conv2Net(self.model.input_size, self.model.num_classes)
+        if torch.cuda.is_available():
+            best_model.cuda()
+        best_model.load_state_dict(torch.load('temp.ckpt'))
+
+        with torch.no_grad():
+            correct = 0
+            total = 0
+            for images, labels in test_dataloader:
+                images = images.to(self.device)
+                labels = labels.to(self.device)
+
+                scores = best_model.forward(images)
+
+                predicted = []
+
+                def get_class(x):
+                    return torch.argsort(x)[-1]
+
+                for i in range(0, len(scores)):
+                    predicted.append(get_class(scores[i]))
+
+                predicted = torch.stack(predicted)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+
+            test_accuracy = 100 * correct / total
+            print('Test accuracy is: {} %'.format(test_accuracy))
+            print('Best validation accuracy is: {} %'.format(self.get_stat(self.BEST_VALIDATION_ACCURACY)))
+        self.update_stat(self.TEST_ACCURACY, test_accuracy)
+
+        return test_accuracy
+
+    def prune(self, mask_dict, prune_percent=0.1):
+        # Use the best model obtained through early stopping. Weights are in the file temp.ckpt
+        # TODO: Make this more elegant - do not hardcode the file name
+        best_model = Conv2Net(self.model.input_size, self.model.num_classes)
+        if torch.cuda.is_available():
+            best_model.cuda()
+        best_model.load_state_dict(torch.load('temp.ckpt'))
+
+        # We assume that all layers are pruned by the same percentage
+        # Yes, we prune per layer, not globally
+
+        for name, parameter in best_model.named_parameters():
+            # Prune the linear layers at prune_percent
+            # Prune the output and convolutional layers at half that rate
+            if 'weight' in name:
+                current_mask = mask_dict.get(name, None)
+                if 'conv' in name or 'output' in name:
+                    new_mask = self.get_new_mask(prune_percent/2, parameter.data, current_mask)
+                elif 'linear' in name:
                     new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
                 mask_dict[name] = new_mask
 

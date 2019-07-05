@@ -20,3 +20,13 @@ SHUFFLENET = {
     'prune_percent': 0.2,
     'prune_iterations': 40
 }
+
+CONV2 = {
+    'input_size': 32 * 32 * 3,
+    'num_classes': 10,
+    'batch_size': 100,
+    'learning_rate': 0.0002,
+    'epochs': 25,
+    'prune_percent': 0.2,
+    'prune_iterations': 2
+}

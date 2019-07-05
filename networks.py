@@ -278,3 +278,46 @@ class ShuffleNet(LotteryExperimentNetwork):
         x = self.fc(x)
 
         return x
+
+
+class Conv2Net(LotteryExperimentNetwork):
+    def __init__(self, input_size, num_classes, pre_init=None, mask_dict=None):
+        super(Conv2Net, self).__init__(pre_init=pre_init, mask_dict=mask_dict)
+        self.input_size = input_size
+        self.num_classes = num_classes
+        self.pre_init = pre_init
+        self.mask_dict = mask_dict
+        self.layers = self.create_layers()
+        self.apply_pre_init(pre_init)
+        self.initial_weights = self.retrieve_initial_weights()
+
+    def create_layers(self):
+        layers = []
+
+        # So that we can iterate through the layer_sizes
+        self.conv_1 = nn.Conv2d(3, 64, 3)
+        self.conv_2 = nn.Conv2d(64, 64, 3)
+        self.max_pool = nn.MaxPool2d(3, stride=2)
+
+        self.linear_1 = nn.Linear(256, 256)
+        self.linear_2 = nn.Linear(256, 256)
+        self.output = nn.Linear(256, self.num_classes)
+
+    def weights_init(self, m):
+        if type(m) == nn.Linear:
+            m.weight.data.normal_(0.0, 1e-3)
+            m.bias.data.fill_(0.)
+        if type(m) == nn.Conv2d:
+            torch.nn.init.xavier_uniform(m.weight)
+
+    def apply_pre_init(self, pre_init):
+        # TODO: This should be implemented in the super class
+
+        # No pre_init. Hence randomly initialize the weights for the Linear layers
+        if pre_init is None:
+            self.apply(self.weights_init)
+        else:
+            self.load_state_dict(pre_init, strict=False)
+
+    def forward(self, x):
+        return self.layers(x)
