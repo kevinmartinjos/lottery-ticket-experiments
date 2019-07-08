@@ -26,7 +26,7 @@ CONV2 = {
     'num_classes': 10,
     'batch_size': 100,
     'learning_rate': 0.0002,
-    'epochs': 25,
+    'epochs': 15,
     'prune_percent': 0.2,
-    'prune_iterations': 2
+    'prune_iterations': 35
 }

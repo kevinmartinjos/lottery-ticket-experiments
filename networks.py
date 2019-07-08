@@ -299,7 +299,9 @@ class Conv2Net(LotteryExperimentNetwork):
         self.conv_2 = nn.Conv2d(64, 64, 3)
         self.max_pool = nn.MaxPool2d(3, stride=2)
 
-        self.linear_1 = nn.Linear(64, 256)
+        # How did I come up with the input dims?
+        # https://discuss.pytorch.org/t/valueerror-expected-input-batch-size-324-to-match-target-batch-size-4/24498/2
+        self.linear_1 = nn.Linear(64*13*13, 256)
         self.linear_2 = nn.Linear(256, 256)
         self.output = nn.Linear(256, self.num_classes)
 
@@ -323,7 +325,7 @@ class Conv2Net(LotteryExperimentNetwork):
         x = self.conv_1(x)
         x = self.conv_2(x)
         x = self.max_pool(x)
-        x = x.view(-1, 64)
+        x = x.view(x.size(0), -1)
         x = self.linear_1(x)
         x = self.linear_2(x)
         x = self.output(x)
