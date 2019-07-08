@@ -287,7 +287,7 @@ class Conv2Net(LotteryExperimentNetwork):
         self.num_classes = num_classes
         self.pre_init = pre_init
         self.mask_dict = mask_dict
-        self.layers = self.create_layers()
+        self.create_layers()
         self.apply_pre_init(pre_init)
         self.initial_weights = self.retrieve_initial_weights()
 
