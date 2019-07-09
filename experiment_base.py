@@ -363,9 +363,10 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
                 if name == 'fc.weight':
                     # Last layer always has a different prune rate
                     new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
+                    mask_dict[name] = new_mask
                 elif 'conv' in name:
                     new_mask = self.get_new_mask(prune_percent/2, parameter.data, current_mask)
-                mask_dict[name] = new_mask
+                    mask_dict[name] = new_mask
 
         self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))
         return mask_dict
