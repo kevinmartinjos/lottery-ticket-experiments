@@ -254,6 +254,14 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
     def __init__(self, *args, **kwargs):
         super(ShuffleNetExperimentRunner, self).__init__(*args, **kwargs)
 
+    def get_initial_mask(self):
+        mask_dict = dict()
+        for name, parameter in self.model.named_parameters():
+            if 'weight' in name and ('conv' in name or 'fc' in name):
+                mask_dict[name] = torch.ones(parameter.data.shape)
+
+        return mask_dict
+
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
