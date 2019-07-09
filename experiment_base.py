@@ -352,11 +352,12 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
             # TODO: Check if we should indeed ignore the bias
             if 'weight' in name:
                 current_mask = mask_dict.get(name, None)
+                new_mask = current_mask
                 if name == 'fc.weight':
                     # Last layer always has a different prune rate
-                    new_mask = self.get_new_mask(prune_percent / 2, parameter.data, current_mask)
-                else:
                     new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
+                elif 'conv' in name:
+                    new_mask = self.get_new_mask(prune_percent/2, parameter.data, current_mask)
                 mask_dict[name] = new_mask
 
         self.update_stat(self.ZERO_PERCENTAGE_IN_MASKS, self.get_zero_count_in_mask(mask_dict))

@@ -135,6 +135,7 @@ def shufflenet_experiment():
     mask_dict = experiment.prune(initial_mask_dict, prune_percent=prune_percent)
 
     for i in range(1, pruning_iterations):
+        print("Pruning Iteration: {0}".format(i))
         initial_weights_after_mask = apply_mask_dict_to_weight_dict(mask_dict, experiment.model.initial_weights)
         new_model = ShuffleNet(input_size, num_classes, pre_init=initial_weights_after_mask, mask_dict=mask_dict)
         if torch.cuda.is_available():
