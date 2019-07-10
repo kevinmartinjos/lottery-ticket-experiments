@@ -82,6 +82,7 @@ def shufflenet_experiment():
     input_size = hyperparameter_presets.SHUFFLENET['input_size']
     batch_size = hyperparameter_presets.SHUFFLENET['batch_size']
     learning_rate = hyperparameter_presets.SHUFFLENET['learning_rate']
+    reg = hyperparameter_presets.SHUFFLENET['reg']
     num_epochs = hyperparameter_presets.SHUFFLENET['epochs']
     prune_percent = hyperparameter_presets.SHUFFLENET['prune_percent']
     pruning_iterations = hyperparameter_presets.SHUFFLENET['prune_iterations']
@@ -126,7 +127,9 @@ def shufflenet_experiment():
     if torch.cuda.is_available():
         model.cuda()
 
-    experiment = ShuffleNetExperimentRunner(model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate)
+    experiment = ShuffleNetExperimentRunner(
+        model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, reg=reg
+    )
 
     experiment.train(input_size, train_loader, val_loader)
     experiment.test(input_size, test_loader)

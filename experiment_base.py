@@ -23,9 +23,9 @@ class ExperimentRunner:
     ZERO_PERCENTAGE_IN_MASKS = "zero_percentage_in_masks"
     PERCENTAGE_WEIGHT_MASKED = "percentage_weight_masked"
 
-    def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95):
+    def __init__(self, model, num_epochs=10, batch_size=200, learning_rate=5e-3, learning_rate_decay=0.95, reg=0.001):
         self.learning_rate = learning_rate
-        self.reg = 0.001  # Should this be a hyper parameter?
+        self.reg = reg
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.learning_rate_decay = learning_rate_decay
