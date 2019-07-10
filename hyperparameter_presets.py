@@ -18,7 +18,8 @@ SHUFFLENET = {
     'learning_rate': 0.0002,
     'epochs': 20,
     'prune_percent': 0.2,
-    'prune_iterations': 40
+    'prune_iterations': 40,
+    'reg': 0.0001
 }
 
 CONV2 = {
