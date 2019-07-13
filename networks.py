@@ -187,8 +187,10 @@ class ShuffleNetUnit(nn.Module):
         x = x.transpose_(1, 2).contiguous()
         x = x.view(n, c, w, h)
 
-        x = self.bn_dw(self.dwconv(x))
-        x = self.bn2(self.gconv2(x))
+        x = self.dwconv(x)
+        # x = self.bn_dw(self.dwconv(x))
+        x = self.gconv2(x)
+        # x = self.bn2(self.gconv2(x))
 
         if self.do_concat:
             # Shortcut refers to the shortcut path when stride = 2 (refer to figure 2 in the paper)

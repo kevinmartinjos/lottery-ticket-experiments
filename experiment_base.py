@@ -257,7 +257,7 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
     def get_initial_mask(self):
         mask_dict = dict()
         for name, parameter in self.model.named_parameters():
-            if 'weight' in name and ('conv' in name or 'fc' in name):
+            if 'weight' in name:
                 mask_dict[name] = torch.ones(parameter.data.shape)
 
         return mask_dict
@@ -364,7 +364,7 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
                     # Last layer always has a different prune rate
                     new_mask = self.get_new_mask(prune_percent, parameter.data, current_mask)
                     mask_dict[name] = new_mask
-                elif 'conv' in name:
+                else:
                     new_mask = self.get_new_mask(prune_percent/2, parameter.data, current_mask)
                     mask_dict[name] = new_mask
 
