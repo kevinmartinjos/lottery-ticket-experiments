@@ -179,7 +179,8 @@ class ShuffleNetUnit(nn.Module):
         # assert self.n == int(self.n), "error shape to shuffle"
 
     def forward(self, inputs):
-        x = F.relu(self.bn1(self.gconv1(inputs)))
+        # x = F.relu(self.bn1(self.gconv1(inputs)))
+        x = F.relu(self.gconv1(inputs))
 
         # channel shuffle
         n, c, w, h = x.shape
