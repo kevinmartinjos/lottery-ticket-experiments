@@ -152,25 +152,25 @@ class ShuffleNetUnit(nn.Module):
         # TODO: Figure out why we need this at all
         neck_channel_size = int(self.output_size/4)
         self.gconv1 = nn.Conv2d(self.input_size, neck_channel_size, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(neck_channel_size)
+        # self.bn1 = nn.BatchNorm2d(neck_channel_size)
 
         self.dwconv = nn.Conv2d(
             neck_channel_size, neck_channel_size, groups=neck_channel_size, stride=self.stride, kernel_size=3,
             padding=1, bias=False
         )
-        self.bn_dw = nn.BatchNorm2d(neck_channel_size)
+        # self.bn_dw = nn.BatchNorm2d(neck_channel_size)
 
         if self.do_concat:
             self.gconv2 = nn.Conv2d(
                 neck_channel_size, self.output_size - self.input_size, groups=1, kernel_size=1, bias=False
             )
-            self.bn2 = nn.BatchNorm2d(self.output_size - self.input_size)
+            # self.bn2 = nn.BatchNorm2d(self.output_size - self.input_size)
         else:
             # TODO: Figure out why we need self.output_size - self.input_size for the stride=2 unit
             self.gconv2 = nn.Conv2d(
                 neck_channel_size, self.output_size, groups=1, kernel_size=1, bias=False
             )
-            self.bn2 = nn.BatchNorm2d(self.output_size)
+            # self.bn2 = nn.BatchNorm2d(self.output_size)
 
         # Not shuffling
         # for channel shuffle operation
