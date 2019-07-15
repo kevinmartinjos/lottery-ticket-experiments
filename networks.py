@@ -221,7 +221,7 @@ class ShuffleNet(LotteryExperimentNetwork):
     def create_layers(self):
         # Refer to table 1 in the shuffle net paper. The layers are created in the order mentioned in the table
         self.conv_1 = nn.Conv2d(3, 24, kernel_size=3, padding=1, stride=1, bias=False)
-        self.bn_1 = nn.BatchNorm2d(24)
+        # self.bn_1 = nn.BatchNorm2d(24)
         self.max_pool_1 = nn.MaxPool2d(3, stride=2)  # TODO: Fix stride and padding if necessary
 
         self.g = 1  # Redundant, I know
@@ -268,7 +268,8 @@ class ShuffleNet(LotteryExperimentNetwork):
 
     def forward(self, inputs):
         # first conv layer
-        x = F.relu(self.bn_1(self.conv_1(inputs)))
+        # x = F.relu(self.bn_1(self.conv_1(inputs)))
+        x = F.relu(self.conv_1(inputs))
         # x = self.max_pool_1(x) TODO: Uncomment this?
 
         # bottlenecks
