@@ -17,7 +17,7 @@ SHUFFLENET = {
     'batch_size': 100,
     'learning_rate': 0.0002,
     'epochs': 50,
-    'prune_percent': 0.2,
+    'prune_percent': 0.1,
     'prune_iterations': 40,
     'reg': 0.001
 }
