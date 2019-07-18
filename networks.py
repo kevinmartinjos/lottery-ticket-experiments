@@ -213,7 +213,6 @@ class ShuffleNet(LotteryExperimentNetwork):
         self.create_layers()
         self.apply_pre_init(pre_init)
         self.initial_weights = self.retrieve_initial_weights()
-        self.g = 1
 
     def create_layers(self):
         # Refer to table 1 in the shuffle net paper. The layers are created in the order mentioned in the table
@@ -221,7 +220,6 @@ class ShuffleNet(LotteryExperimentNetwork):
         self.bn_1 = nn.BatchNorm2d(24)
         self.max_pool_1 = nn.MaxPool2d(3, stride=2)  # TODO: Fix stride and padding if necessary
 
-        self.g = 1  # Redundant, I know
         c2_size = 144
         c3_size = 2 * c2_size
         c4_size = 4 * c2_size
