@@ -128,14 +128,10 @@ class ExperimentRunner:
 
         plt.plot(percent_weights, val_accuracies, 'g-', label='validation acc.')
         plt.plot(percent_weights, test_accuracies, 'b-', label='test acc.')
-        plt.legend(loc='upper left')
+        plt.plot(percent_weights, val_accuracy_iterations, 'r-', label='iteration')
+        plt.legend(loc='lower right')
         plt.xlabel('Percentage of weights pruned')
-        plt.ylabel('Accuracy')
-        plt.savefig("accuracy.png")
-
-        plt.plot(percent_weights, val_accuracy_iterations)
-        plt.xlabel('Percentage of weights pruned')
-        plt.ylabel('Early stopping iteration')
+        plt.ylabel('Early stopping iteration/Accuracy')
         plt.savefig("iteration.png")
 
 

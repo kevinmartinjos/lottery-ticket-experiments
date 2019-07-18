@@ -15,11 +15,11 @@ SHUFFLENET = {
     'input_size': 32 * 32 * 3,
     'num_classes': 10,
     'batch_size': 100,
-    'learning_rate': 0.0002,
+    'learning_rate': 0.001,
     'epochs': 20,
     'prune_percent': 0.1,
     'prune_iterations': 40,
-    'reg': 0.0001
+    'reg': 0
 }
 
 CONV2 = {
