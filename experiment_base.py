@@ -17,7 +17,8 @@ class ExperimentRunner:
     TRAINING_DURATION_SECONDS = "training_duration_seconds"
     FINAL_VALIDATION_ACCURACY = "final_validation_accuracy"
     TEST_ACCURACY = "test_accuracy"
-    BEST_VALIDATION_ACCURACY = " best_validation_accuracy"
+    BEST_VALIDATION_ACCURACY = "best_validation_accuracy"
+    BEST_VALIDATION_ACCURACY_ITERATION = "best_validation_accuracy_iteration"
     DEVICE = "device"
     ZERO_PERCENTAGE_IN_INITIAL_WEIGHTS = "zero_percentage_in_initial_weights"
     ZERO_PERCENTAGE_IN_MASKS = "zero_percentage_in_masks"
@@ -121,11 +122,21 @@ class ExperimentRunner:
 
     def plot(self):
         percent_weights = [stat[self.PERCENTAGE_WEIGHT_MASKED] for stat in self.stats]
-        accuracies = [stat[self.BEST_VALIDATION_ACCURACY] for stat in self.stats]
-        plt.plot(percent_weights, accuracies)
-        plt.xlabel('percentage of weights pruned')
-        plt.ylabel('Early stopping val acc.')
-        plt.savefig("graph.png")
+        val_accuracies = [stat[self.BEST_VALIDATION_ACCURACY] for stat in self.stats]
+        val_accuracy_iterations = [stat[self.BEST_VALIDATION_ACCURACY_ITERATION] for stat in self.stats]
+        test_accuracies = [stat[self.TEST_ACCURACY] for stat in self.stats]
+
+        plt.plot(percent_weights, val_accuracies, 'g-', label='validation acc.')
+        plt.plot(percent_weights, test_accuracies, 'b-', label='test acc.')
+        plt.legend(loc='upper left')
+        plt.xlabel('Percentage of weights pruned')
+        plt.ylabel('Accuracy')
+        plt.savefig("accuracy.png")
+
+        plt.plot(percent_weights, val_accuracy_iterations)
+        plt.xlabel('Percentage of weights pruned')
+        plt.ylabel('Early stopping iteration')
+        plt.savefig("iteration.png")
 
 
 class MNISTExperimentRunner(ExperimentRunner):
@@ -267,6 +278,7 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
         training_start_time = time.time()
         best_validation_accuracy_so_far = 0
+        best_validation_accuracy_iteration = 0
         for epoch in tqdm(range(self.num_epochs)):
             for i, (images, labels) in enumerate(train_dataloader):
                 # Move tensors to the configured device
@@ -281,7 +293,9 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
             validation_accuracy = self.validate(input_size, validation_dataloader)
             if validation_accuracy > best_validation_accuracy_so_far:
                 best_validation_accuracy_so_far = validation_accuracy
+                best_validation_accuracy_iteration = epoch
                 self.update_stat(self.BEST_VALIDATION_ACCURACY, best_validation_accuracy_so_far)
+                self.update_stat(self.BEST_VALIDATION_ACCURACY_ITERATION, best_validation_accuracy_iteration)
                 torch.save(self.model.state_dict(), 'temp.ckpt')
 
         self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
