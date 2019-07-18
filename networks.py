@@ -131,7 +131,7 @@ class ShuffleNetUnit(nn.Module):
         self.input_size = input_size
         self.output_size = output_size
         self.stride = stride
-        self.g = 1
+        self.g = 2
 
         # See the shuffleNetUnit figures (figure 2) in the paper. If stride = 2, we should do a avg pooling and concat
         self.do_concat = do_concat
@@ -152,25 +152,25 @@ class ShuffleNetUnit(nn.Module):
         # TODO: Figure out why we need this at all
         neck_channel_size = int(self.output_size/4)
         self.gconv1 = nn.Conv2d(self.input_size, neck_channel_size, kernel_size=1, bias=False)
-        # self.bn1 = nn.BatchNorm2d(neck_channel_size)
+        self.bn1 = nn.BatchNorm2d(neck_channel_size)
 
         self.dwconv = nn.Conv2d(
             neck_channel_size, neck_channel_size, groups=neck_channel_size, stride=self.stride, kernel_size=3,
             padding=1, bias=False
         )
-        # self.bn_dw = nn.BatchNorm2d(neck_channel_size)
+        self.bn_dw = nn.BatchNorm2d(neck_channel_size)
 
         if self.do_concat:
             self.gconv2 = nn.Conv2d(
                 neck_channel_size, self.output_size - self.input_size, groups=1, kernel_size=1, bias=False
             )
-            # self.bn2 = nn.BatchNorm2d(self.output_size - self.input_size)
+            self.bn2 = nn.BatchNorm2d(self.output_size - self.input_size)
         else:
             # TODO: Figure out why we need self.output_size - self.input_size for the stride=2 unit
             self.gconv2 = nn.Conv2d(
                 neck_channel_size, self.output_size, groups=1, kernel_size=1, bias=False
             )
-            # self.bn2 = nn.BatchNorm2d(self.output_size)
+            self.bn2 = nn.BatchNorm2d(self.output_size)
 
         # Not shuffling
         # for channel shuffle operation
@@ -179,8 +179,7 @@ class ShuffleNetUnit(nn.Module):
         # assert self.n == int(self.n), "error shape to shuffle"
 
     def forward(self, inputs):
-        # x = F.relu(self.bn1(self.gconv1(inputs)))
-        x = F.relu(self.gconv1(inputs))
+        x = F.relu(self.bn1(self.gconv1(inputs)))
 
         # channel shuffle
         n, c, w, h = x.shape
@@ -188,10 +187,8 @@ class ShuffleNetUnit(nn.Module):
         x = x.transpose_(1, 2).contiguous()
         x = x.view(n, c, w, h)
 
-        x = self.dwconv(x)
-        # x = self.bn_dw(self.dwconv(x))
-        x = self.gconv2(x)
-        # x = self.bn2(self.gconv2(x))
+        x = self.bn_dw(self.dwconv(x))
+        x = self.bn2(self.gconv2(x))
 
         if self.do_concat:
             # Shortcut refers to the shortcut path when stride = 2 (refer to figure 2 in the paper)
@@ -221,7 +218,7 @@ class ShuffleNet(LotteryExperimentNetwork):
     def create_layers(self):
         # Refer to table 1 in the shuffle net paper. The layers are created in the order mentioned in the table
         self.conv_1 = nn.Conv2d(3, 24, kernel_size=3, padding=1, stride=1, bias=False)
-        # self.bn_1 = nn.BatchNorm2d(24)
+        self.bn_1 = nn.BatchNorm2d(24)
         self.max_pool_1 = nn.MaxPool2d(3, stride=2)  # TODO: Fix stride and padding if necessary
 
         self.g = 1  # Redundant, I know
@@ -268,8 +265,7 @@ class ShuffleNet(LotteryExperimentNetwork):
 
     def forward(self, inputs):
         # first conv layer
-        # x = F.relu(self.bn_1(self.conv_1(inputs)))
-        x = F.relu(self.conv_1(inputs))
+        x = F.relu(self.bn_1(self.conv_1(inputs)))
         # x = self.max_pool_1(x) TODO: Uncomment this?
 
         # bottlenecks
