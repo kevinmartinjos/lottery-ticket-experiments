@@ -300,7 +300,8 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
                 torch.save(self.model.state_dict(), 'temp.ckpt')
 
             # lr_decay acts  based on  the number of epochs expired
-            if self.should_decay_lr:
+            # Increase lr from 2e-4 to 0.00766 in 20 epochs
+            if self.should_decay_lr and epoch < 20:
                 scheduler.step()
 
         self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)

@@ -15,13 +15,13 @@ SHUFFLENET = {
     'input_size': 32 * 32 * 3,
     'num_classes': 10,
     'batch_size': 100,
-    'learning_rate': 0.01,
+    'learning_rate': 2e-4,
     'epochs': 30,
     'prune_percent': 0.1,
     'prune_iterations': 40,
     'reg': 0,
-    'lr_step_size': 10,
-    'lr_step_gamma': 0.1,
+    'lr_step_size': 1,
+    'lr_step_gamma': 1.1,  # Yes, increase the learning rate
     'decay_lr': True
 }
 
