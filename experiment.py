@@ -86,6 +86,9 @@ def shufflenet_experiment():
     num_epochs = hyperparameter_presets.SHUFFLENET['epochs']
     prune_percent = hyperparameter_presets.SHUFFLENET['prune_percent']
     pruning_iterations = hyperparameter_presets.SHUFFLENET['prune_iterations']
+    lr_step_size = hyperparameter_presets.SHUFFLENET['lr_step_size']
+    lr_step_gamma = hyperparameter_presets.SHUFFLENET['lr_step_gamma']
+    should_decay_lr = hyperparameter_presets.SHUFFLENET['decay_lr']
 
     # Temporary parameters. Should probably move this to the hyper parameters file as well
     num_training = 45000
@@ -128,7 +131,8 @@ def shufflenet_experiment():
         model.cuda()
 
     experiment = ShuffleNetExperimentRunner(
-        model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, reg=reg
+        model, batch_size=batch_size, num_epochs=num_epochs, learning_rate=learning_rate, reg=reg,
+        should_decay_lr=should_decay_lr, lr_step_size=lr_step_size, lr_step_gamma=lr_step_gamma
     )
 
     experiment.train(input_size, train_loader, val_loader)

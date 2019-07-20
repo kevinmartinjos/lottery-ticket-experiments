@@ -258,7 +258,10 @@ class MNISTExperimentRunner(ExperimentRunner):
 
 
 class ShuffleNetExperimentRunner(ExperimentRunner):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, should_decay_lr=False, lr_step_size=0, lr_step_gamma=0.1, **kwargs):
+        self.should_decay_lr = should_decay_lr
+        self.lr_step_size = lr_step_size
+        self.lr_step_gamma = lr_step_gamma
         super(ShuffleNetExperimentRunner, self).__init__(*args, **kwargs)
 
     def get_initial_mask(self):
@@ -272,6 +275,8 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
     def train(self, input_size, train_dataloader, validation_dataloader):
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.reg)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.lr_step_size, gamma=self.lr_step_gamma)
+
         training_start_time = time.time()
         best_validation_accuracy_so_far = 0
         best_validation_accuracy_iteration = 0
@@ -293,6 +298,10 @@ class ShuffleNetExperimentRunner(ExperimentRunner):
                 self.update_stat(self.BEST_VALIDATION_ACCURACY, best_validation_accuracy_so_far)
                 self.update_stat(self.BEST_VALIDATION_ACCURACY_ITERATION, best_validation_accuracy_iteration)
                 torch.save(self.model.state_dict(), 'temp.ckpt')
+
+            # lr_decay acts  based on  the number of epochs expired
+            if self.should_decay_lr:
+                scheduler.step()
 
         self.update_stat(self.TRAINING_DURATION_SECONDS, time.time() - training_start_time)
         self.update_stat(self.FINAL_VALIDATION_ACCURACY, validation_accuracy)
