@@ -22,7 +22,7 @@ SHUFFLENET = {
     'reg': 0,
     'lr_step_size': 1,
     'lr_step_gamma': 1.1,  # Yes, increase the learning rate
-    'decay_lr': False
+    'decay_lr': True
 }
 
 CONV2 = {
