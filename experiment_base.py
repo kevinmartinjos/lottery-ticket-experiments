@@ -121,10 +121,16 @@ class ExperimentRunner:
         return zeros_info_dict
 
     def plot(self):
-        percent_weights = [stat[self.PERCENTAGE_WEIGHT_MASKED] for stat in self.stats]
+        percent_weights = [
+            stat[self.PERCENTAGE_WEIGHT_MASKED] for stat in self.stats if stat[self.PERCENTAGE_WEIGHT_MASKED] <= 0.9
+        ]
+        x_axis_num_points = len(percent_weights)
         val_accuracies = [stat[self.BEST_VALIDATION_ACCURACY] for stat in self.stats]
+        val_accuracies = val_accuracies[:x_axis_num_points]
         val_accuracy_iterations = [stat[self.BEST_VALIDATION_ACCURACY_ITERATION] for stat in self.stats]
+        val_accuracy_iterations = val_accuracy_iterations[:x_axis_num_points]
         test_accuracies = [stat[self.TEST_ACCURACY] for stat in self.stats]
+        test_accuracies = test_accuracies[:x_axis_num_points]
 
         plt.plot(percent_weights, val_accuracies, 'g-', label='validation acc.')
         plt.plot(percent_weights, test_accuracies, 'b-', label='test acc.')

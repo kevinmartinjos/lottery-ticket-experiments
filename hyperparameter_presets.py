@@ -16,13 +16,13 @@ SHUFFLENET = {
     'num_classes': 10,
     'batch_size': 100,
     'learning_rate': 2e-4,
-    'epochs': 30,
+    'epochs': 20,
     'prune_percent': 0.1,
     'prune_iterations': 40,
-    'reg': 0,
+    'reg': 0.0001,
     'lr_step_size': 1,
     'lr_step_gamma': 1.1,  # Yes, increase the learning rate
-    'decay_lr': True
+    'decay_lr': False
 }
 
 CONV2 = {
